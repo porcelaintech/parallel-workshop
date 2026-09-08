@@ -104,6 +104,8 @@ $pwbInstaller = Join-Path $env:TEMP ('ParallelWorkbench-install-' + [Guid]::NewG
 
 ## 后续路线
 
-1. **上架 Microsoft Edge 加载项商店**（正式分发，无需开发者模式）：按微软商店审核要求补充隐私说明等材料
-2. **（可选）Windows 原生应用**：Edge WebView2（`CoreWebView2Environment` 指向 Edge 用户数据目录可继承 Edge 登录态，但有"Edge 需先关闭/独立配置目录"的限制）；工程量大，仅在扩展形态不能满足时考虑
-3. 平台改版导致适配器失效：改 `lib/adapters/*.json`（或同步回 macOS 侧统一改），重新加载扩展即可
+2026-09-08 起，下一正式版的发行方向调整为 **Windows 原生应用 + MSIX + Microsoft Store 管理安装和更新**。现有扩展仍为当前稳定版；新增的 [原生验证工程](native-preview/README.md) 用于验证三窗格、会话与打包，不是完整产品。
+
+原生应用使用自己的 WebView2 数据目录和按平台隔离的 profile，不复用或读取 Edge 浏览器的用户目录，也不承诺自动继承浏览器登录态。需要在新应用中验证各服务支持的登录方式和重启后的会话保持。
+
+整体阶段、Mac 路线、缺少 Windows 终端时的构建与实测边界见 [原生应用与商店发行推进](../docs/native-store-release-plan.md)。

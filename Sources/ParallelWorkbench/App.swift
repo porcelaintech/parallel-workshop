@@ -5,11 +5,15 @@ import WorkbenchCore
 
 @main
 struct ParallelWorkbenchApp: App {
+    #if APP_STORE
+    @StateObject private var updates = UpdateCoordinator()
+    #else
     @StateObject private var updates = UpdateCoordinator(relaunch: {
         try Updater.scheduleRelaunch(afterProcessID: ProcessInfo.processInfo.processIdentifier,
                                     applicationURL: URL(fileURLWithPath: Updater.installDestination))
         NSApp.terminate(nil)
     })
+    #endif
     init() {
         // 关闭 stdout/stderr 缓冲，注入日志实时可见
         setvbuf(stdout, nil, _IONBF, 0)
@@ -26,7 +30,7 @@ struct ParallelWorkbenchApp: App {
         .defaultSize(width: 1520, height: 900)
         .commands {
             CommandGroup(after: .appInfo) {
-                Button("检查更新…") { updates.manualCheck() }
+                Button(updates.menuTitle) { updates.manualCheck() }
                     .disabled(updates.isBusy)
                 if updates.availableVersion != nil {
                     Button(updates.buttonTitle) { updates.primaryAction() }

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key><string>智囊</string>
+    <key>CFBundleDisplayName</key><string>智囊</string>
+    <key>CFBundleExecutable</key><string>$(EXECUTABLE_NAME)</string>
+    <key>CFBundleIdentifier</key><string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+    <key>CFBundlePackageType</key><string>APPL</string>
+    <key>CFBundleShortVersionString</key><string>$(MARKETING_VERSION)</string>
+    <key>CFBundleVersion</key><string>$(CURRENT_PROJECT_VERSION)</string>
+    <key>CFBundleIconFile</key><string>AppIcon</string>
+    <key>LSMinimumSystemVersion</key><string>$(MACOSX_DEPLOYMENT_TARGET)</string>
+    <key>LSApplicationCategoryType</key><string>public.app-category.productivity</string>
+    <key>NSHighResolutionCapable</key><true/>
+    <key>NSHumanReadableCopyright</key><string>$(PWB_COPYRIGHT)</string>
+    <key>NSMicrophoneUsageDescription</key><string>使用麦克风，将你的语音输入到提问框。</string>
+    <key>NSSpeechRecognitionUsageDescription</key><string>将你的语音转成文字并填入提问框；识别服务可能需要连接 Apple。</string>
+    <key>PWBDistributionChannel</key><string>app-store</string>
+    <key>PWBAppStoreID</key><string>$(PWB_APP_STORE_ID)</string>
+</dict>
+</plist>

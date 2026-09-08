@@ -103,7 +103,7 @@ struct ContentView: View {
                 .disabled(updates.isBusy || model.sending)
                 .fixedSize()
                 .accessibilityIdentifier("workbench.update")
-                .help("检查 GitHub 最新版本；发现新版后点击即可安装并重启")
+                .help(updates.helpText)
 
                 Label("⌘↩ 发送", systemImage: "command")
                     .font(.caption2.weight(.medium))

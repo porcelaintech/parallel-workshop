@@ -1,0 +1,9 @@
+// Placeholder identity is only for unsigned local verification.
+// Supply the registered identity and Team explicitly for signing.
+PWB_STORE_BUNDLE_ID = local.braintrust.storepreview
+DEVELOPMENT_TEAM =
+PWB_APP_STORE_ID =
+PWB_COPYRIGHT =
+MARKETING_VERSION = 0.0.0
+CURRENT_PROJECT_VERSION = 1
+CODE_SIGN_STYLE = Automatic

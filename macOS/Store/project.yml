@@ -1,0 +1,72 @@
+name: ParallelWorkbenchStore
+options:
+  minimumXcodeGenVersion: 2.46.0
+  deploymentTarget:
+    macOS: "13.0"
+  createIntermediateGroups: true
+configs:
+  Debug: debug
+  Release: release
+configFiles:
+  Debug: Config/Store.xcconfig
+  Release: Config/Store.xcconfig
+settings:
+  base:
+    SWIFT_VERSION: 5.0
+    SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) APP_STORE"
+    MACOSX_DEPLOYMENT_TARGET: "13.0"
+    CODE_SIGN_STYLE: Automatic
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    ENABLE_HARDENED_RUNTIME: YES
+    GENERATE_INFOPLIST_FILE: NO
+targets:
+  WorkbenchCore:
+    type: framework
+    platform: macOS
+    sources:
+      - path: ../../Sources/WorkbenchCore
+        excludes:
+          - Resources
+          - Updater.swift
+          - UpdaterRelaunch.swift
+          - UpdateCoordinator.swift
+      - path: ../../Sources/WorkbenchCore/Resources/adapters
+        type: folder
+        buildPhase: resources
+      - path: ../../Sources/WorkbenchCore/Resources/injection
+        type: folder
+        buildPhase: resources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: "$(PWB_STORE_BUNDLE_ID).core"
+        GENERATE_INFOPLIST_FILE: YES
+        SKIP_INSTALL: YES
+        DEFINES_MODULE: YES
+  ParallelWorkbenchStore:
+    type: application
+    platform: macOS
+    productName: ParallelWorkbench
+    sources:
+      - path: ../../Sources/ParallelWorkbench
+      - path: Generated/AppIcon.icns
+        buildPhase: resources
+    dependencies:
+      - target: WorkbenchCore
+        embed: true
+    settings:
+      base:
+        PRODUCT_NAME: ParallelWorkbench
+        PRODUCT_BUNDLE_IDENTIFIER: "$(PWB_STORE_BUNDLE_ID)"
+        INFOPLIST_FILE: Info.plist
+        CODE_SIGN_ENTITLEMENTS: ParallelWorkbenchStore.entitlements
+        ENABLE_APP_SANDBOX: YES
+        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/../Frameworks"
+schemes:
+  ParallelWorkbenchStore:
+    build:
+      targets:
+        ParallelWorkbenchStore: all
+    run:
+      config: Debug
+    archive:
+      config: Release

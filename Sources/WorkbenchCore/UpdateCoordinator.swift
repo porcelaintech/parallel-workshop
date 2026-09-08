@@ -52,6 +52,9 @@ import Combine
         phase == .checking || phase == .installing || phase == .restarting
     }
 
+    public var menuTitle: String { "检查更新…" }
+    public var helpText: String { "检查 GitHub 最新版本；发现新版后点击即可安装并重启" }
+
     public var buttonTitle: String {
         switch phase {
         case .checking: return "检查中…"
