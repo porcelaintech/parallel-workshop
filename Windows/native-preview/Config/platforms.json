@@ -1,0 +1,33 @@
+[
+  {
+    "id": "chatgpt",
+    "name": "ChatGPT",
+    "origin": "https://chatgpt.com/",
+    "navigationHosts": [
+      "chatgpt.com",
+      "chat.openai.com",
+      "auth.openai.com",
+      "appleid.apple.com"
+    ]
+  },
+  {
+    "id": "deepseek",
+    "name": "DeepSeek",
+    "origin": "https://chat.deepseek.com/",
+    "navigationHosts": [
+      "chat.deepseek.com",
+      "open.weixin.qq.com",
+      "appleid.apple.com"
+    ]
+  },
+  {
+    "id": "doubao",
+    "name": "豆包",
+    "origin": "https://www.doubao.com/chat/",
+    "navigationHosts": [
+      "www.doubao.com",
+      "doubao.com",
+      "open.weixin.qq.com"
+    ]
+  }
+]

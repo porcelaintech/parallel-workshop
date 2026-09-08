@@ -1,0 +1,53 @@
+name: Windows native preview
+
+on:
+  workflow_dispatch:
+  # First-run verification only; never run this preview automatically on main.
+  push:
+    branches: [codex/store-foundation-20260908]
+    paths:
+      - 'Windows/native-preview/**'
+      - '.github/workflows/windows-native-preview.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build-preview:
+    runs-on: windows-2022
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: Windows/native-preview
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+          dotnet-quality: ga
+      - name: Verify source metadata and package configuration
+        run: python scripts/validate-preview.py
+      - name: Parse preview PowerShell scripts
+        run: |
+          Get-ChildItem scripts -Filter '*.ps1' | ForEach-Object {
+            $tokens = $null
+            $parseErrors = $null
+            [Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$tokens, [ref]$parseErrors) | Out-Null
+            if ($parseErrors.Count -gt 0) { throw ($parseErrors | Out-String) }
+          }
+      - name: Test navigation and profile policy without opening any website
+        run: |
+          dotnet run --project Tests/PolicyChecks.csproj -- Config/platforms.json
+          if ($LASTEXITCODE -ne 0) { throw 'Navigation/session policy checks failed.' }
+      - name: Build baseline unsigned MSIX
+        run: ./scripts/Build-Preview.ps1 -PackageVersion 0.1.0.0
+      - name: Build upgrade unsigned MSIX with the same local identity
+        run: ./scripts/Build-Preview.ps1 -PackageVersion 0.1.1.0
+      - name: Upload packages and build evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-native-preview-unsigned-x64
+          path: Windows/native-preview/artifacts/packages
+          if-no-files-found: error
+          retention-days: 14

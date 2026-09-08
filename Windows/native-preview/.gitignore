@@ -1,0 +1,8 @@
+bin/
+obj/
+artifacts/
+Tests/bin/
+Tests/obj/
+*.pfx
+*.p12
+*.cer
