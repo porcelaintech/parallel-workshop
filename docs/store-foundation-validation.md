@@ -44,6 +44,7 @@ Xcode 26.6 在加载自身 `IDESimulatorFoundation` / 系统 `DVTDownloads.frame
 - 本机结构检查已通过，包括固定依赖、XML、资源、平台元数据及开发包身份。
 - [首轮 Windows 构建](https://github.com/porcelaintech/parallel-workshop/actions/runs/34177684285) 在源码配置检查时发现默认编码差异；已改为显式 UTF-8，并验证 CRLF 文本不造成误报。
 - [第二轮 Windows 构建](https://github.com/porcelaintech/parallel-workshop/actions/runs/34177824078)（`c22ed17`）已成功完成：真实 C# 编译、导航与 profile 策略测试、PowerShell 解析，以及 `0.1.0.0` / `0.1.1.0` 两个未签名 x64 MSIX 包生成和包内身份检查全部通过。
+- [最终代码的 Windows 构建](https://github.com/porcelaintech/parallel-workshop/actions/runs/34178056063)（`80ae37a`，包含外部自定义协议拦截）再次全部通过；包与构建证据保存为 `windows-native-preview-unsigned-x64`。该结果对应本阶段最终产品代码，之后的本记录补充仅为文档变更。
 - 编译和打包已取得 Windows 环境证据；安装、登录、会话保留、实际升级和商店分发仍待验证。后续源码变更需对应提交的 CI 结果。
 - 工作流仅针对独立测试分支相关文件或手动触发，不发布 Release、不上传商店、不使用真实平台账户。上传范围限包目录，不包含应用会话数据和二进制构建日志。
 
