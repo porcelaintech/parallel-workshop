@@ -93,6 +93,12 @@ public sealed class PlatformPane : Grid, IDisposable
             _status.Text = "页面已加载；登录与附件权限请以站点显示为准";
         };
         core.NewWindowRequested += OnNewWindowRequested;
+        // Also cover custom protocol launches originating in site subframes.
+        core.LaunchingExternalUriScheme += (_, args) => {
+            args.Cancel = true;
+            ClearBlockedLink();
+            _status.Text = "已阻止网页唤起外部应用。此验证版只允许显式确认后的 HTTPS 浏览器链接。";
+        };
         core.WindowCloseRequested += (_, _) => { if (_isPopup) CloseRequested?.Invoke(); };
         core.PermissionRequested += (_, args) => {
             if (!args.IsUserInitiated || !PlatformPolicy.IsAllowed(_platform, args.Uri))
