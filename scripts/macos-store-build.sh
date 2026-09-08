@@ -62,6 +62,10 @@ if [[ "$task_action" == archive ]]; then
 else
   task_app="$task_output/DerivedData/Build/Products/Release/ParallelWorkbench.app"
 fi
-python3 "$task_repo/scripts/macos-store-verify.py" "$task_app"
+task_verify_args=("$task_app")
+if [[ "$task_action" == archive ]]; then
+  task_verify_args+=(--archive "$task_output/ParallelWorkbench.xcarchive")
+fi
+python3 "$task_repo/scripts/macos-store-verify.py" "${task_verify_args[@]}"
 echo "Mac Store $task_mode $task_action completed: $task_app"
 echo "No installation or upload performed. Unsigned results are not distributable Store releases."

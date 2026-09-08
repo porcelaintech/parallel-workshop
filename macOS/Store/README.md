@@ -26,6 +26,16 @@ swift test --scratch-path .build/store-foundation-regression
 - 顶部和菜单将用户带到配置好的 Mac App Store 页面；后台与回到前台不会打开商店。未配置数字 App Store ID 时，界面明确说明页面尚未配置，不伪造链接，也不会声称“已经是最新版”。
 - `macos-store-test.sh` 链接归档中的真实 framework，在源码目录外测试资源加载、空/非法 ID、手动打开、打开失败、后台不打开和不虚报更新状态；不会联网或打开真实商店。
 
+Xcode 的归档嵌入步骤会移除 framework 的 `Modules`。测试脚本默认从同一归档旁的 `DerivedData/Build/Intermediates.noindex/ArchiveIntermediates/ParallelWorkbenchStore/IntermediateBuildFilesPath/UninstalledProducts/macosx/WorkbenchCore.framework/Modules` 导入 Swift 类型信息，并通过两份 framework 的 Mach-O UUID 核对构建来源；链接和实际运行仍使用归档内的 framework。测试不会向正式归档复制模块或其他测试文件，也不会自动改用 swiftc 预览 framework。
+
+自定义应用位置可显式传入同次构建的 `WorkbenchCore.framework/Modules` 目录：
+
+```bash
+bash scripts/macos-store-test.sh "/绝对路径/ParallelWorkbench.app" "/同次构建/WorkbenchCore.framework/Modules"
+```
+
+只有上述固定归档布局会自动推导模块位置，缺失时明确失败。自带模块的 swiftc 预览仍可只传应用路径。测试还会核对实际动态库加载路径，确认运行的就是所指定应用内部的 framework。
+
 ## 权限
 
 `ParallelWorkbenchStore.entitlements` 声明 App Sandbox、网络客户端、用户选择文件只读，以及沙盒麦克风与 Hardened Runtime 音频输入权限。Info.plist 包含麦克风和语音识别用途说明。不申请全盘、相机或用户选择文件写权限。
@@ -61,12 +71,13 @@ bash scripts/macos-store-build.sh signed archive
 - XcodeGen 2.46.0 已成功生成真实 application/framework 工程，并验证源文件排除和资源复制配置。
 - 站外 SwiftPM 测试：28 项，0 失败，其中 1 项显式联网探测按默认设置跳过。
 - 公开参数前置校验：空参数、占位标识、无效 Team、零构建号、非法商店 ID、非正式版本号都被拒绝。
-- Xcode 26.6 的归档尝试在编译前失败：系统 `DVTDownloads.framework` 与 `IDESimulatorFoundation` 缺失符号；`-checkFirstLaunchStatus` 返回 69。官方 `-runFirstLaunch` 无交互完成结果；非交互管理员重试返回 `sudo: a password is required`。没有改动系统私有框架或读取密码，尚无成功的 Xcode archive。
+- 最初的 Xcode 26.6 归档在编译前遇到首次初始化缺失；用户完成官方 `sudo xcodebuild -runFirstLaunch` 后，状态检查返回 0，真实 Xcode 无签名归档已成功。
+- 归档的 ApplicationProperties、单应用 Products 结构、版本和身份一致性、双架构、资源与自更新排除检查全部通过；测试实际加载归档内 framework，验证资源及商店更新行为，拒绝混用另一构建的模块信息。
 - 为继续验证源码，增加了 `bash scripts/macos-store-preview.sh`。它使用现有 Swift 编译器生成 `build/macos-store-preview/ParallelWorkbench.app`，Info 中显式标记为 **swiftc 本地预览，非 Xcode archive**。应用和 framework 的 arm64/x86_64 构建、包内资源一致性、实际资源加载、二进制自更新排除、商店更新行为检查均通过。
 
-该预览没有完成正式签名或沙盒运行认证，不可作为 App Store 提交包。完成 Xcode 首次初始化后，应重新运行正式的 `unsigned archive` 和对应测试。
+该预览不可作为 App Store 提交包。当前已额外生成真实 `unsigned archive` 并完成对应测试；归档仍需要真实发行身份、分发签名及商店验证。
 
-另外已在独立临时副本中完成 ad-hoc App Sandbox 的启动、三个网页加载、商店更新提示与本地文件读取检查；该副本未启用 Hardened Runtime，不能代替正式签名验证。具体边界见 [第一阶段验证记录](../../docs/store-foundation-validation.md)。
+另外已分别对预览和真实归档的独立临时副本完成 ad-hoc App Sandbox 启动、三个网页加载及商店更新提示检查；预览副本还完成本地文件读取检查。这些副本未启用 Hardened Runtime，不能代替正式签名验证。具体边界见 [第一阶段验证记录](../../docs/store-foundation-validation.md)。
 
 ## 仍需完成的发布验证
 

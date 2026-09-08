@@ -8,6 +8,8 @@
 | --- | --- |
 | 原有 SwiftPM 回归 | 28 项测试，0 失败，1 项主动联网探测跳过；不代表真实平台发送测试已完成 |
 | 商店通道编译 | 使用现有 swiftc 独立编译 APP_STORE 通道；应用和内嵌 framework 均包含 arm64、x86_64 |
+| 真实 Xcode Archive | 用户完成首次初始化后，无签名应用归档成功；ArchiveVersion 2、ApplicationProperties、版本与应用身份相符，Products 下只有单个应用，包含两份 dSYM |
+| 归档实际模块测试 | 从同一次构建的模块信息编译测试，核对两架构 UUID，运行时确认加载归档内 framework；资源与商店更新行为检查通过，混用预览模块会被拒绝 |
 | 资源加载 | 从生成的真实 framework 加载 6 个适配器、3 个注入脚本 |
 | 自更新隔离 | Xcode 商店目标物理排除三个站外更新源码；预览二进制检查未发现 GitHub 更新查询、DMG 安装、隔离标记移除、安装目标或重启脚本路径 |
 | 更新状态行为 | 缺失/非法 Store ID、手动打开商店失败、后台不自动打开商店、不虚报已是最新版等检查通过 |
@@ -19,23 +21,31 @@
 
 本地预览由 `scripts/macos-store-preview.sh` 生成，输出位于 `build/macos-store-preview/`。它在包中标记为 `swiftc-local-preview-not-xcode-archive`，不是 Xcode Archive，也不能直接交付 App Store。
 
+目前已另行生成真实 Xcode 应用归档：`build/macos-store-unsigned/ParallelWorkbench.xcarchive`。该归档不带预览标记；仍使用本地开发占位身份、无分发签名，尚不是可提交商店的正式签名包。
+
 ### 本地沙盒启动的签名边界
 
 界面测试使用临时副本、ad-hoc 签名和 App Sandbox。此副本没有启用 Hardened Runtime，正式 Xcode 工程仍保持 `ENABLE_HARDENED_RUNTIME=YES`，没有加入禁用库校验的 entitlement。
+
+真实 Xcode 归档生成后，也已从该归档复制独立临时副本，在同样的本地签名边界下验证启动、三个网页加载及缺少商店编号时的准确提示。验证完成后退出副本，没有登录、发送或替换原安装应用。
 
 先前给临时副本同时启用 Hardened Runtime 时，系统因主程序和自有 framework 都没有 Team ID 而拒绝加载。Apple 的库校验要求 Apple 签名或与主程序相同 Team ID 的库；因此上述本地界面结果不能代替正式 Team 签名及 Hardened Runtime 验证。[Apple 库校验说明](https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.security.cs.disable-library-validation)
 
 尚未验证：真实账户登录/登出/失效、登录保持、真实附件上传、语音权限与转写、旧版数据迁移、正式签名、TestFlight 和商店更新。
 
-### Xcode Archive 的实际阻塞
+### Xcode Archive：首次初始化阻塞已解除
 
-Xcode 26.6 在加载自身 `IDESimulatorFoundation` / 系统 `DVTDownloads.framework` 时报告缺失符号，尚未开始项目编译。
+首次尝试时，Xcode 26.6 在加载自身 `IDESimulatorFoundation` / 系统 `DVTDownloads.framework` 时报告缺失符号，尚未开始项目编译。
 
 - `xcodebuild -checkFirstLaunchStatus` 返回 69，表明首次初始化未完成。
 - 普通初始化未完成；非交互管理员初始化返回 `sudo: a password is required`。
 - 未读取或代填管理员密码，未删除或替换系统私有框架。
 
-需要本机管理员完成 Xcode 官方首次初始化，再重新执行 `bash scripts/macos-store-build.sh unsigned archive`。初始化后仍须以真实归档结果判断，不能预先宣称问题已经解决。
+用户随后在本机执行官方初始化并得到 `Install Succeeded`。重新检测返回 0；再次运行 `bash scripts/macos-store-build.sh unsigned archive` 得到 `ARCHIVE SUCCEEDED`，归档结构、双架构和资源验证通过。
+
+本次实际编译输入也已核对：应用和 framework 的两架构编译均启用 `APP_STORE`，两个 `WorkbenchCore.SwiftFileList` 均排除了三份站外更新源码。归档验证脚本增加了应用归档结构检查，能拒绝缺少 `ApplicationProperties` 的 generic archive。
+
+Xcode 归档会移除内嵌 framework 的编译模块信息，原测试脚本因此无法导入模块。现已修正测试入口：仅从同次构建导入类型信息，核 UUID 后链接和实际加载归档内二进制，不改动归档内容、不用预览模块替代。
 
 ## Windows：真实云端验证
 
@@ -52,7 +62,7 @@ Windows 本地开发包即使成功生成，仍需真实交互环境验证安装
 
 ## 下一阶段的进入条件
 
-1. 完成 Xcode 首次初始化，得到真实 Mac Archive 并验证正式签名路径。
+1. Mac 无签名 Archive 已完成；下一步配置发行账户与正式应用身份，验证正式签名路径。
 2. 保持 Windows 云端编译与 MSIX 构建通过，按最终提交保留结果。
 3. 接入可交互的 Windows 测试环境，执行产品级验证；不要求必须购买实体 Windows 电脑。
 4. 确定发行主体并开通 Apple Developer / Microsoft Store 账户，配置正式应用身份。
