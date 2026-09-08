@@ -39,7 +39,7 @@ def outputs():
     definitions = []
     for platform_id in PLATFORMS:
         source = REPO / "Sources/WorkbenchCore/Resources/adapters" / (platform_id + ".json")
-        adapter = json.loads(source.read_text())
+        adapter = json.loads(source.read_text(encoding="utf-8"))
         definitions.append({
             "id": adapter["id"], "name": adapter["name"], "origin": adapter["origin"],
             "navigationHosts": list(dict.fromkeys(adapter["homeHosts"] + AUTH_HOSTS[platform_id])),
@@ -55,7 +55,11 @@ if __name__ == "__main__":
     arguments = parser.parse_args()
     for path, expected in outputs():
         if arguments.check:
-            if not path.exists() or path.read_bytes() != expected:
+            # Git on Windows may materialize text files as CRLF; read_text normalizes it.
+            actual = None if not path.exists() else (
+                path.read_text(encoding="utf-8").encode("utf-8") if path.suffix == ".json" else path.read_bytes()
+            )
+            if actual != expected:
                 raise SystemExit(f"Preview metadata/asset is stale: {path.relative_to(PREVIEW)}")
         else:
             path.parent.mkdir(parents=True, exist_ok=True)

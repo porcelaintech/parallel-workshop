@@ -24,7 +24,7 @@ assert identity.attrib == {
     "Name": "Braintrust.NativePreview.Development",
     "Publisher": "CN=Braintrust Native Preview Development", "Version": "0.1.0.0",
 }
-platforms = json.loads((root / "Config/platforms.json").read_text())
+platforms = json.loads((root / "Config/platforms.json").read_text(encoding="utf-8"))
 assert len(platforms) == 3
 assert len({p["id"] for p in platforms}) == 3
 for path in (root / "Assets").glob("*.png"):
