@@ -2,7 +2,7 @@
 
 这是独立工程小样，验证 `WinUI 3 + WebView2 + MSIX` 是否适合下一版 Windows 产品。现有 Edge 扩展不受它影响。本工程没有统一发送、附件分发、自动登录识别，也不是完整的下一版产品。
 
-**2026-09-08 状态：源文件与打包基础已准备；当前机器为 Mac，没有 Windows/.NET/PowerShell。Windows 编译、实际安装、登录与升级均尚未验证。CI 首次运行结果待记录。**
+**2026-09-08 状态：提交 `c22ed17` 已在真实云端 Windows runner 上通过 C# 编译、导航策略测试及两份 MSIX 打包。[查看构建证据](https://github.com/porcelaintech/parallel-workshop/actions/runs/34177824078)。实际安装、站点登录、会话保留、应用升级与商店更新仍未验证。后续提交需要以各自的 CI 结果为准。**
 
 ## 当前范围
 
@@ -26,9 +26,9 @@
 | 目标 | Windows x64，最低 Windows 10 build 19041 | 只声明工程最低 API 边界；尚未完成该系统版本实测 |
 | 打包 | MSIX，.NET/WinUI 自包含 | Evergreen WebView2 Runtime 仍为单独依赖 |
 
-版本存在性已通过微软官方发布说明以及 NuGet 索引/包元数据核查。使用 WinUI 组件包避免把无关的 AI/ML SDK 带入验证工程。NuGet 的间接依赖图尚未通过真实 restore 固化，首次 CI 需审查 restore/build 结果。
+版本存在性已通过微软官方发布说明以及 NuGet 索引/包元数据核查。使用 WinUI 组件包避免把无关的 AI/ML SDK 带入验证工程。上述 Windows CI 已完成真实 NuGet restore 和构建；当前尚未提交间接依赖的锁定文件，正式发行前仍需固定并审查依赖图。
 
-Windows 环境需要 .NET 10 SDK、PowerShell 7，以及可用的 WinUI/MSIX 构建依赖。推荐已安装 Windows 应用开发工作负载的 Visual Studio 2026。CI 先使用 Windows 2022 runner + `dotnet build`；其首次实际编译是待过的关卡，不能将配置文件的存在视为编译通过。
+Windows 环境需要 .NET 10 SDK、PowerShell 7，以及可用的 WinUI/MSIX 构建依赖。使用 IDE 时推荐已安装 Windows 应用开发工作负载的 Visual Studio 2026。上述 CI 已在 Windows 2022 runner + `dotnet build` 上完成实际编译打包；它不证明交互式应用已成功运行。
 
 从本目录执行：
 
@@ -64,7 +64,7 @@ $previewPackages = Get-ChildItem artifacts/packages -Filter '*.msix' -Recurse
 
 | 关卡 | 通过证据 | 当前状态 |
 | --- | --- | --- |
-| C# 与打包 | 成功编译日志、两份 MSIX、实际清单/版本/摘要 | 待 Windows/CI |
+| C# 与打包 | 成功编译日志、两份 MSIX、实际清单/版本/摘要 | `c22ed17` 已通过上述 Windows CI |
 | 干净安装 | 新用户环境能启动；缺 Runtime 时提示明确，安装 Runtime 后恢复 | 待 Windows |
 | 登录与会话 | 各平台手动登录、重启应用仍登录；退出一平台不退出其他平台 | 待 Windows + 测试账户 |
 | 登录兼容性 | 各登录方式、弹窗与重定向的实际成功/失败记录 | 待 Windows + 测试账户 |
@@ -73,7 +73,9 @@ $previewPackages = Get-ChildItem artifacts/packages -Filter '*.msix' -Recurse
 | 包升级 | `0.1.0.0 → 0.1.1.0` 同身份升级、版本变化且会话保留 | 待 Windows |
 | 商店路径 | 真实 Partner Center 身份、受控分发、商店更新、认证结果 | 待账户与前述关卡 |
 
-源码包含可单独运行的 C# 导航策略检查（伪装域名、凭据 URL、scheme/port、跨平台隔离和诊断脱敏）。Mac 的 Python 校验仅能证明 XML、版本配置、元数据与资源结构，不代替 C# 测试或 Windows 运行。CI 不访问 AI 网站、不登录、不签名、不安装、不上传至商店。它支持手动触发，另仅在 `codex/store-foundation-20260908` 分支的本目录或该 workflow 变动时触发首次验证；不会自动在 `main` 运行。CI 只保存包目录，二进制构建日志留在执行机，不上传。`build-evidence.json` 中没有执行的关卡始终是 `pending`。
+源码包含可单独运行的 C# 导航策略检查（伪装域名、凭据 URL、scheme/port、跨平台隔离和诊断脱敏），已在上述 Windows CI 执行通过。PowerShell 7 语法解析、UTF-8/CRLF 配置检查、`0.1.0.0` 与 `0.1.1.0` 两次编译打包和实际包身份/版本检查均通过；输出的 MSIX 尚未签名。Mac 的 Python 校验仅能证明 XML、版本配置、元数据与资源结构，不代替 C# 测试或 Windows 运行。
+
+CI 不访问 AI 网站、不登录、不签名、不安装、不上传至商店。它支持手动触发，另仅在 `codex/store-foundation-20260908` 分支的本目录或该 workflow 变动时触发验证；不会自动在 `main` 运行。CI 只保存包目录，二进制构建日志留在执行机，不上传。`build-evidence.json` 中没有执行的关卡始终是 `pending`。
 
 本地 MSIX 升级通过也不等于商店更新通过。正式准备阶段还要完成 ARM64 决策、窗口布局/无障碍/性能实测、下载和权限交互、诊断与故障恢复，以及后续的“登录与实际权限下共同支持类型交集”能力模块。
 
