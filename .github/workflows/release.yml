@@ -123,7 +123,7 @@ jobs:
           & $msbuild Windows/native/ParallelWorkbench/ParallelWorkbench.csproj `
             /restore /p:Configuration=Release /p:Platform=x64 `
             /p:SelfContained=true /p:RuntimeIdentifier=win-x64 `
-            /p:AppxBundle=Never /p:AppxPackageDir="$PWD\artifacts" `
+            /p:AppxBundle=Never /p:AppxPackageDir="$PWD\artifacts\" `
             /p:GenerateAppxPackageOnBuild=true `
             /p:AppxPackageSigningEnabled=true `
             /p:PackageCertificateThumbprint="$((Get-ChildItem Cert:\CurrentUser\My | Where-Object Subject -eq 'CN=ParallelWorkbenchDev' | Select-Object -First 1).Thumbprint)" `
@@ -132,7 +132,8 @@ jobs:
       - name: 规整产物名
         shell: bash
         run: |
-          MSIX=$(ls artifacts/*.msix | head -1)
+          MSIX=$(find artifacts -name "*.msix" | head -1)
+          echo "MSIX: $MSIX"
           cp "$MSIX" "artifacts/Braintrust-windows-x64-${{ steps.ver.outputs.version }}.msix"
           ls -la artifacts/
 
