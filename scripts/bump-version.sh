@@ -27,5 +27,11 @@ s = open(p).read()
 s = re.sub(r'version "\d+\.\d+\.\d+"', f'version "{v}"', s, count=1)
 open(p, "w").write(s)
 
+# Windows 原生 MSIX：x.y.z → x.y.z.0（Store 版本号必须是四段）
+p = "Windows/native/ParallelWorkbench/Package.appxmanifest"
+s = open(p).read()
+s = re.sub(r'(Version=")\d+\.\d+\.\d+(?:\.\d+)?(")', rf'\g<1>{v}.0\g<2>', s, count=1)
+open(p, "w").write(s)
+
 print(f"✅ 版本统一为 {v}")
 EOF

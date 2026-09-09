@@ -1,0 +1,186 @@
+name: 商店构建与发布
+
+# 双商店上架专用构建（与产品 CI ci.yml 并存）：
+# - 手动触发：macOS DMG + Windows 原生 MSIX，产物可下载
+# - 推送 v* tag：双平台构建后自动创建 draft Release
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  # ─────────────────────────── macOS：DMG（可选签名公证）───────────────────────────
+  build-macos:
+    name: macOS DMG
+    runs-on: macos-latest
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: 版本号（统一事实源：Edge manifest）
+        id: ver
+        run: |
+          V=$(python3 -c 'import json; print(json.load(open("Windows/edge-extension/manifest.json"))["version"])')
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "版本: $V"
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: scripts/package-lock.json
+
+      - name: 安装 QA 依赖
+        run: npm ci --prefix scripts --ignore-scripts --no-audit --no-fund
+
+      - name: QA 门禁
+        run: bash scripts/qa.sh
+
+      - name: 打包 .app + DMG
+        run: |
+          bash scripts/package-app.sh
+          VERSION="${{ steps.ver.outputs.version }}" bash scripts/package-dmg.sh
+
+      - name: 签名 + 公证（配置了证书 secrets 时启用）
+        env:
+          DEVELOPER_ID_APPLICATION: ${{ secrets.DEVELOPER_ID_APPLICATION }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APP_APP_PASSWORD: ${{ secrets.APP_APP_PASSWORD }}
+          MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+          MACOS_KEYCHAIN_PASSWORD: ${{ secrets.MACOS_KEYCHAIN_PASSWORD }}
+        run: |
+          if [ -z "$MACOS_CERT_P12" ]; then
+            echo "ℹ️ 未配置签名证书 secrets，跳过签名公证（产物为未签名 DMG）"
+            exit 0
+          fi
+          echo "$MACOS_CERT_P12" | base64 --decode > cert.p12
+          security create-keychain -p "$MACOS_KEYCHAIN_PASSWORD" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "$MACOS_KEYCHAIN_PASSWORD" build.keychain
+          security import cert.p12 -k build.keychain -P "$MACOS_CERT_PASSWORD" -A -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$MACOS_KEYCHAIN_PASSWORD" build.keychain
+          bash scripts/sign-release.sh
+
+      - name: 上传产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: ParallelWorkbench-macOS-${{ steps.ver.outputs.version }}
+          path: |
+            build/ParallelWorkbench-*.dmg
+            build/edge-extension.zip
+          if-no-files-found: error
+
+  # ─────────────────────────── Windows：WinUI 3 MSIX ───────────────────────────
+  build-windows:
+    name: Windows MSIX (x64)
+    runs-on: windows-latest
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: 版本号（统一事实源：Edge manifest）
+        id: ver
+        shell: bash
+        run: |
+          V=$(python3 -c 'import json; print(json.load(open("Windows/edge-extension/manifest.json"))["version"])' 2>/dev/null || python -c 'import json; print(json.load(open("Windows/edge-extension/manifest.json"))["version"])')
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "版本: $V"
+
+      - name: 同步共享注入核心
+        shell: bash
+        run: bash scripts/sync-windows-native.sh
+
+      - name: 生成测试签名证书（仅 CI 验证用；上架时 Partner Center 会替换身份并签名）
+        shell: pwsh
+        run: |
+          $cert = New-SelfSignedCertificate -Type Custom -Subject "CN=ParallelWorkbenchDev" `
+            -KeyUsage DigitalSignature -FriendlyName "PWB CI dev" `
+            -CertStoreLocation "Cert:\CurrentUser\My" `
+            -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.3","2.5.29.19={text}")
+          $pwd = ConvertTo-SecureString -String "pwb-ci-dev" -Force -AsPlainText
+          Export-PfxCertificate -Cert $cert -FilePath cert.pfx -Password $pwd
+
+      - name: 构建 MSIX
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $msbuild = & $vswhere -latest -requires Microsoft.Component.MSBuild -find 'MSBuild\**\Bin\MSBuild.exe' | Select-Object -First 1
+          if (-not $msbuild) { throw "未找到 MSBuild（缺少 VS 2022 的 MSBuild 组件）" }
+          Write-Host "MSBuild: $msbuild"
+          New-Item -ItemType Directory -Force -Path artifacts | Out-Null
+          & $msbuild Windows/native/ParallelWorkbench/ParallelWorkbench.csproj `
+            /restore /p:Configuration=Release /p:Platform=x64 `
+            /p:SelfContained=true /p:RuntimeIdentifier=win-x64 `
+            /p:AppxBundle=Never /p:AppxPackageDir="$PWD\artifacts" `
+            /p:GenerateAppxPackageOnBuild=true `
+            /p:AppxPackageSigningEnabled=true `
+            /p:PackageCertificateKeyFile="$PWD\cert.pfx" `
+            /p:PackageCertificatePassword=pwb-ci-dev `
+            /m
+
+      - name: 规整产物名
+        shell: bash
+        run: |
+          MSIX=$(ls artifacts/*.msix | head -1)
+          cp "$MSIX" "artifacts/Braintrust-windows-x64-${{ steps.ver.outputs.version }}.msix"
+          ls -la artifacts/
+
+      - name: 上传产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: Braintrust-windows-x64-${{ steps.ver.outputs.version }}
+          path: artifacts/Braintrust-windows-x64-*.msix
+          if-no-files-found: error
+
+  # ─────────────────────────── tag 触发时创建 draft Release ───────────────────────────
+  release:
+    name: 创建 draft Release
+    needs: [build-macos, build-windows]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: 下载产物
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: 计算 SHA256 并创建 draft Release
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          DMG=$(find dist -name "*.dmg" | head -1)
+          MSIX=$(find dist -name "*.msix" | head -1)
+          ZIP=$(find dist -name "edge-extension.zip" | head -1)
+          NOTES="智囊 · Braintrust v${VERSION}（macOS DMG + Windows 原生 MSIX + Edge 扩展）
+
+          安装方式：
+          - macOS：下载 DMG → 拖入 Applications → 双击（配置签名 secrets 后为公证版，无 Gatekeeper 警告）
+          - Windows 原生：MSIX 为 CI 测试签名包，双击安装需先信任证书；正式包将通过 Microsoft Store 分发
+          - Windows 扩展：edge-extension.zip 解压侧载（正式版走 Edge 加载项商店）
+
+          校验和："
+          if [ -n "$DMG" ]; then NOTES="$NOTES
+
+          SHA256 $(basename "$DMG") $(sha256sum "$DMG" | awk '{print $1}')"; fi
+          if [ -n "$MSIX" ]; then NOTES="$NOTES
+
+          SHA256 $(basename "$MSIX") $(sha256sum "$MSIX" | awk '{print $1}')"; fi
+          if [ -n "$ZIP" ]; then NOTES="$NOTES
+
+          SHA256 $(basename "$ZIP") $(sha256sum "$ZIP" | awk '{print $1}')"; fi
+          gh release create "${GITHUB_REF_NAME}" \
+            $DMG $MSIX $ZIP \
+            --title "智囊 · Braintrust ${VERSION}" \
+            --notes "$NOTES" \
+            --draft
+          echo "✅ draft Release 已创建：https://github.com/${GITHUB_REPOSITORY}/releases/tag/${GITHUB_REF_NAME}"

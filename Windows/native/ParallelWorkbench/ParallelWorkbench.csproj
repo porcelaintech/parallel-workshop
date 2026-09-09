@@ -1,0 +1,60 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    平行工作台 Windows 原生应用（WinUI 3 + WebView2 + 单工程 MSIX）
+    构建（Visual Studio 2022 或 GitHub Actions windows-latest）：
+      msbuild ParallelWorkbench.csproj /restore /p:Configuration=Release /p:Platform=x64 ^
+        /p:AppxBundle=Never /p:AppxPackageDir=out /p:GenerateAppxPackageOnBuild=true ^
+        /p:PackageCertificateKeyFile=cert.pfx /p:PackageCertificatePassword=...
+    上架 Microsoft Store 前，把 Package.appxmanifest 里的 Identity Name/Publisher
+    换成 Partner Center 分配的正式值（见 STORE_LISTING.md）。
+  -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <RootNamespace>ParallelWorkbench</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Platforms>x64;x86;ARM64</Platforms>
+    <RuntimeIdentifiers>win-x64;win-x86;win-arm64</RuntimeIdentifiers>
+    <!-- 商店分发包必须自包含 .NET 运行时（目标用户机器不保证装有 .NET 8）；
+         CI/发布构建加 /p:SelfContained=true /p:RuntimeIdentifier=win-x64 -->
+    <UseWinUI>true</UseWinUI>
+    <EnableMsixTooling>true</EnableMsixTooling>
+    <WindowsPackageType>MSIX</WindowsPackageType>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <SelfContained>false</SelfContained>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.6.240829007" />
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.1742" />
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2739.15" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AppxManifest Include="Package.appxmanifest">
+      <SubType>Designer</SubType>
+    </AppxManifest>
+  </ItemGroup>
+
+  <!-- 共享注入核心（由 scripts/sync-windows-native.sh 从 Sources/WorkbenchCore/Resources 同步） -->
+  <ItemGroup>
+    <Content Include="Resources\adapters\*.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Resources\injection\*.js">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <!-- 应用与商店图标（由 scripts/win-logos.sh 生成） -->
+  <ItemGroup>
+    <Content Include="Assets\*.png" />
+    <Content Include="Assets\*.ico" />
+  </ItemGroup>
+
+</Project>

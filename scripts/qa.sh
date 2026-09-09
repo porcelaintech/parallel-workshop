@@ -83,6 +83,15 @@ else
   FAIL=1
 fi
 
+echo "==> 5/5 Windows 原生资源同步校验（唯一事实源：Sources/WorkbenchCore/Resources）"
+bash scripts/sync-windows-native.sh > /dev/null
+if git diff --quiet -- Windows/native/ParallelWorkbench/Resources; then
+  echo "    已同步，无差异"
+else
+  echo "❌ Windows/native/ParallelWorkbench/Resources 与共享核心不同步，请提交同步后的资源"
+  FAIL=1
+fi
+
 echo ""
 if [ "$FAIL" -eq 0 ]; then
   echo "✅ QA 门禁全部通过"

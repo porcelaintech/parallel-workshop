@@ -58,6 +58,12 @@ public enum Updater {
         ProcessInfo.processInfo.environment["PWB_REPO"] ?? "porcelaintech/parallel-workshop"
     }
 
+    /// 是否 Mac App Store 构建（打包脚本写入 Info.plist 的 PWBChannel=appstore）。
+    /// App Store 政策禁止应用自助更新，此标记让更新检查自动关闭（更新由 App Store 提供）。
+    public static var isAppStoreBuild: Bool {
+        Bundle.main.infoDictionary?["PWBChannel"] as? String == "appstore"
+    }
+
     public static var currentVersion: String {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.1.0"
     }

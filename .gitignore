@@ -14,3 +14,11 @@ Windows/edge-extension/_metadata/
 # 系统文件
 .DS_Store
 *.swiftpm
+
+# Windows 原生（.NET/WinUI/MSIX）
+Windows/native/**/bin/
+Windows/native/**/obj/
+Windows/native/**/.vs/
+Windows/native/**/*.user
+*.pfx
+artifacts/

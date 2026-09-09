@@ -65,6 +65,7 @@ import Combine
     }
 
     public func startAutomaticChecks() {
+        guard !Updater.isAppStoreBuild else { return }   // App Store 构建不自助更新
         guard pollingTask == nil else { return }
         pollingTask = Task { [weak self] in
             while !Task.isCancelled {
@@ -93,6 +94,11 @@ import Combine
 
     public func check(force: Bool) async {
         guard !isBusy, !installed else { return }
+        if Updater.isAppStoreBuild {
+            phase = .current
+            message = "已从 App Store 安装，更新由 App Store 提供"
+            return
+        }
         let instant = now()
         if !force, let lastAttemptAt, instant.timeIntervalSince(lastAttemptAt) < foregroundInterval { return }
         lastAttemptAt = instant

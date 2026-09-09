@@ -1,0 +1,41 @@
+{
+  "id": "deepseek",
+  "name": "DeepSeek",
+  "origin": "https://chat.deepseek.com/",
+  "input": {
+    "selectors": [
+      "textarea#chat-input",
+      "#chat-input",
+      "textarea[placeholder*='消息']",
+      "textarea[placeholder*='Message']",
+      "textarea"
+    ]
+  },
+  "send": {
+    "type": "enter"
+  },
+  "probe": {
+    "loggedOut": [
+      "xpath://*[contains(text(),'Login with password')]",
+      "xpath://*[contains(text(),'Scan with Wechat to login')]",
+      "xpath://div[contains(@class,'ds-button') and contains(text(),'Log in')]",
+      "a[href*='/sign_in']",
+      "a[href*='/login']"
+    ],
+    "challenge": [
+      "#challenge-stage",
+      "#challenge-running",
+      "iframe[title*='challenge' i]",
+      "iframe[title*='验证' i]"
+    ]
+  },
+  "international": false,
+  "homeHosts": [
+    "chat.deepseek.com"
+  ],
+  "attachment": {
+    "selectors": [
+      "input[type=file]"
+    ]
+  }
+}

@@ -3,6 +3,6 @@
   "private": true,
   "description": "QA 门禁依赖：扩展胶水层 jsdom 冒烟测试",
   "dependencies": {
-    "jsdom": "^26.1.0"
+    "jsdom": "^27.4.0"
   }
 }

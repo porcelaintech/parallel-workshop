@@ -1,0 +1,31 @@
+{
+  "id": "yiyan",
+  "name": "文心一言",
+  "origin": "https://yiyan.baidu.com/",
+  "input": {
+    "selectors": [
+      "textarea#chat-textarea",
+      ".ci-textarea",
+      "textarea"
+    ]
+  },
+  "send": {
+    "type": "enter"
+  },
+  "probe": {
+    "loggedOut": [],
+    "loginModal": [
+      "xpath://*[contains(@class,'modal') and contains(text(),'登录')]"
+    ],
+    "challenge": [
+      "iframe[title*='验证' i]",
+      "xpath://*[contains(text(),'安全验证')]"
+    ]
+  },
+  "international": false,
+  "homeHosts": [
+    "yiyan.baidu.com",
+    "wenxin.baidu.com",
+    "passport.baidu.com"
+  ]
+}

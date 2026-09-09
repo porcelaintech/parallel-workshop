@@ -1,0 +1,41 @@
+{
+  "id": "tongyi",
+  "name": "通义千问",
+  "origin": "https://www.tongyi.com/qianwen/",
+  "input": {
+    "selectors": [
+      "div[contenteditable='true']",
+      "[contenteditable='true']",
+      "textarea"
+    ]
+  },
+  "send": {
+    "type": "pointer",
+    "selectors": [
+      "button[aria-label='发送消息']"
+    ]
+  },
+  "probe": {
+    "loggedOut": [
+      "xpath://button[contains(text(),'登录')]",
+      "xpath://button[contains(text(),'立即登录')]"
+    ],
+    "loginModal": [
+      "xpath://*[contains(@class,'modal') and contains(text(),'登录')]"
+    ],
+    "challenge": [
+      "iframe[title*='验证' i]",
+      "iframe[title*='captcha' i]",
+      "#nc_1_n1t"
+    ]
+  },
+  "international": false,
+  "prepare": {
+    "clickSelector": "xpath://button[contains(.,'新建对话')]",
+    "waitSeconds": 3
+  },
+  "homeHosts": [
+    "www.tongyi.com",
+    "www.qianwen.com"
+  ]
+}
