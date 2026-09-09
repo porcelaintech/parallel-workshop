@@ -54,11 +54,22 @@ public sealed class PaneController
     {
         if (_env == null)
         {
-            var dir = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "ParallelWorkbench", "WebView2");
-            Directory.CreateDirectory(dir);
-            _env = await CoreWebView2Environment.CreateAsync(null, dir, null, CancellationToken.None);
+            // WinUI 3 投影只提供无参 CreateAsync：默认用户数据目录即可
+            // （打包形态下 WebView2 自动落到可写的包数据目录），真实路径由环境报告，
+            // 记录到 profile-path.txt 供登录态备份/恢复使用。
+            _env = await CoreWebView2Environment.CreateAsync();
+            try
+            {
+                var udf = _env.UserDataFolder;
+                if (!string.IsNullOrEmpty(udf))
+                {
+                    var root = Path.Combine(
+                        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ParallelWorkbench");
+                    Directory.CreateDirectory(root);
+                    File.WriteAllText(Path.Combine(root, "profile-path.txt"), udf);
+                }
+            }
+            catch { }
         }
         return _env;
     }

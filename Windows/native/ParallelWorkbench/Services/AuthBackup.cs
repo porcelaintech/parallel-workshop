@@ -16,7 +16,25 @@ public static class AuthBackup
     public static string RootDir => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ParallelWorkbench");
 
-    public static string ProfileDir => Path.Combine(RootDir, "WebView2");
+    /// <summary>WebView2 真实用户数据目录：首次启动后由 PaneController 记录到 profile-path.txt，
+    /// 未记录时回退到约定路径（幂等，仅影响备份/恢复的目标选择）。</summary>
+    public static string ProfileDir
+    {
+        get
+        {
+            try
+            {
+                var marker = Path.Combine(RootDir, "profile-path.txt");
+                if (File.Exists(marker))
+                {
+                    var p = File.ReadAllText(marker).Trim();
+                    if (Directory.Exists(p)) return p;
+                }
+            }
+            catch { }
+            return Path.Combine(RootDir, "WebView2");
+        }
+    }
 
     private static string PendingMarker => Path.Combine(RootDir, "restore-pending.txt");
 
