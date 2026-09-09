@@ -14,7 +14,7 @@ public sealed class VoiceInput : IDisposable
     private SpeechRecognizer? _recognizer;
 
     public bool IsRecording { get; private set; }
-    public string Transcript { get; private set; } = "";
+    public string Transcript { get; set; } = "";
     public string? Error { get; private set; }
 
     public async Task<bool> StartAsync()

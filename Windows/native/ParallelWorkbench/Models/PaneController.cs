@@ -57,7 +57,7 @@ public sealed class PaneController
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 "ParallelWorkbench", "WebView2");
             Directory.CreateDirectory(dir);
-            _env = await CoreWebView2Environment.CreateAsync(null, dir);
+            _env = await CoreWebView2Environment.CreateAsync(null, dir, null);
         }
         return _env;
     }
@@ -254,7 +254,8 @@ public sealed class PaneController
     private void SetZoom(double z)
     {
         Zoom = z;
-        try { WebView.CoreWebView2!.ZoomFactor = z; } catch { }
+        // WinUI 3 的 WebView2 缩放属性在 CoreWebView2Controller 上（非 WPF 控件的 CoreWebView2）
+        try { WebView.CoreWebView2Controller!.ZoomFactor = z; } catch { }
     }
 
     /// <summary>点击指定选择器（支持 xpath: 前缀），返回是否命中并点击。</summary>
