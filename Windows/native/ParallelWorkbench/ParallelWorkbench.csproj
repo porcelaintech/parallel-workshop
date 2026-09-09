@@ -20,6 +20,7 @@
     <!-- 商店分发包必须自包含 .NET 运行时（目标用户机器不保证装有 .NET 8）；
          CI/发布构建加 /p:SelfContained=true /p:RuntimeIdentifier=win-x64 -->
     <UseWinUI>true</UseWinUI>
+    <WindowsSdkPackageVersion>10.0.19041.38</WindowsSdkPackageVersion>
     <EnableMsixTooling>true</EnableMsixTooling>
     <WindowsPackageType>MSIX</WindowsPackageType>
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>

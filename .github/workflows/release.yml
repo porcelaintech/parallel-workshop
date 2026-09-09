@@ -85,6 +85,11 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - name: 安装 .NET 8 SDK（WASDK 1.6 要求 8.0.4xx 或显式 WindowsSdkPackageVersion）
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
       - name: 版本号（统一事实源：Edge manifest）
         id: ver
         shell: bash
