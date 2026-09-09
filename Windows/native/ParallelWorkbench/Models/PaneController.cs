@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace ParallelWorkbench.Models;
@@ -57,7 +58,7 @@ public sealed class PaneController
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 "ParallelWorkbench", "WebView2");
             Directory.CreateDirectory(dir);
-            _env = await CoreWebView2Environment.CreateAsync(null, dir, null);
+            _env = await CoreWebView2Environment.CreateAsync(null, dir, null, CancellationToken.None);
         }
         return _env;
     }
@@ -251,11 +252,16 @@ public sealed class PaneController
     public void ZoomOut() => SetZoom(Math.Max(Zoom - 0.1, 0.6));
     public void ResetZoom() => SetZoom(1.0);
 
-    private void SetZoom(double z)
+    private async void SetZoom(double z)
     {
         Zoom = z;
-        // WinUI 3 的 WebView2 缩放属性在 CoreWebView2Controller 上（非 WPF 控件的 CoreWebView2）
-        try { WebView.CoreWebView2Controller!.ZoomFactor = z; } catch { }
+        // WinUI 3 的 WebView2 控件不暴露 ZoomFactor/Controller，缩放用 CSS zoom 注入（Chromium 128+ 支持）
+        try
+        {
+            var v = z.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            await WebView.CoreWebView2!.ExecuteScriptAsync($"document.body.style.zoom = '{v}'");
+        }
+        catch { }
     }
 
     /// <summary>点击指定选择器（支持 xpath: 前缀），返回是否命中并点击。</summary>
