@@ -1,0 +1,60 @@
+<Window
+    x:Class="ParallelWorkbench.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="智囊">
+
+    <Grid x:Name="RootGrid" AllowDrop="True" DragOver="RootGrid_DragOver" Drop="RootGrid_Drop">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <MenuBar Grid.Row="0">
+            <MenuBarItem Title="登录态">
+                <MenuFlyoutItem Text="备份登录态…" Click="BackupAuth_Click"/>
+                <MenuFlyoutItem Text="恢复登录态…" Click="RestoreAuth_Click"/>
+            </MenuBarItem>
+            <MenuBarItem Title="帮助">
+                <MenuFlyoutItem Text="关于" Click="About_Click"/>
+            </MenuBarItem>
+        </MenuBar>
+
+        <!-- 顶部输入区：大输入框 + 语音 + 发送，下方附件栏与控制行 -->
+        <StackPanel Grid.Row="1" Padding="12,10,12,10" Spacing="8">
+            <Grid ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBox x:Name="QuestionBox" Grid.Column="0"
+                         AcceptsReturn="True" TextWrapping="Wrap"
+                         MinHeight="40" MaxHeight="120" FontSize="16"
+                         VerticalContentAlignment="Center"
+                         PlaceholderText="输入问题（Enter 换行，Ctrl+Enter 或点「发送」同步到所有勾选的模型）"
+                         KeyDown="QuestionBox_KeyDown"/>
+                <Button x:Name="MicButton" Grid.Column="1" Padding="14,0,14,0" FontSize="16"
+                        Content="&#x1F3A4;" Click="MicButton_Click"
+                        ToolTipService.ToolTip="语音输入（点击开始，再次点击结束）"/>
+                <Button x:Name="SendButton" Grid.Column="2" Padding="26,0,26,0" FontSize="16"
+                        Style="{StaticResource AccentButtonStyle}" Content="发送" Click="SendButton_Click"/>
+            </Grid>
+            <TextBlock x:Name="VoiceStatusText" FontSize="11" Visibility="Collapsed"
+                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+            <StackPanel x:Name="AttachBar" Orientation="Horizontal" Spacing="8" Visibility="Collapsed"/>
+            <StackPanel x:Name="ControlRow" Orientation="Horizontal" Spacing="12"/>
+        </StackPanel>
+
+        <!-- 窗格区：横向滚动，每窗格最小 420px -->
+        <Grid Grid.Row="2">
+            <ScrollViewer x:Name="PaneScroller"
+                          HorizontalScrollBarVisibility="Auto" HorizontalScrollMode="Enabled"
+                          VerticalScrollBarVisibility="Disabled" VerticalScrollMode="Disabled"
+                          SizeChanged="PaneScroller_SizeChanged">
+                <StackPanel x:Name="PaneHost" Orientation="Horizontal"/>
+            </ScrollViewer>
+        </Grid>
+    </Grid>
+</Window>

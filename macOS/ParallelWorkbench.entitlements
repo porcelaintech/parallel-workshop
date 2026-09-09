@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Mac App Store 必需：应用沙盒 -->
+	<key>com.apple.security.app-sandbox</key>
+	<true/>
+	<!-- 嵌入各平台官网需要联网 -->
+	<key>com.apple.security.network.client</key>
+	<true/>
+	<!-- 附件：用户通过文件选择器选择的文件只读访问 -->
+	<key>com.apple.security.files.user-selected.read-only</key>
+	<true/>
+</dict>
+</plist>

@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap rescap">
+
+  <!--
+    上架 Microsoft Store 前必改：
+    1. Name → Partner Center 里保留的应用名对应的 Package Identity Name
+    2. Publisher → Partner Center 显示的发布者 DN（CN=...）
+    3. Version → 与 Store 提交版本一致（x.y.z.0）
+    详见 Windows/native/STORE_LISTING.md
+  -->
+  <Identity
+    Name="PorcelainTech.Braintrust"
+    Publisher="CN=ParallelWorkbenchDev"
+    Version="0.4.0.0" />
+
+  <Properties>
+    <DisplayName>智囊 · Braintrust</DisplayName>
+    <PublisherDisplayName>HanchengQiao</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+    <Description>智囊 · Braintrust：多模型平行问答工作台，一次提问，ChatGPT / DeepSeek / 豆包 / Kimi / 通义 / 文心并排回答</Description>
+  </Properties>
+
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.17763.0" MaxVersionTested="10.0.26100.0" />
+  </Dependencies>
+
+  <Resources>
+    <Resource Language="zh-CN" />
+  </Resources>
+
+  <Applications>
+    <Application Id="App" Executable="ParallelWorkbench.exe" EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements
+        DisplayName="智囊"
+        Description="多模型平行问答工作台"
+        BackgroundColor="transparent"
+        Square150x150Logo="Assets\Square150x150Logo.png"
+        Square44x44Logo="Assets\Square44x44Logo.png">
+        <uap:DefaultTile
+          Wide310x150Logo="Assets\Wide310x150Logo.png"
+          Square71x71Logo="Assets\Square71x71Logo.png" />
+      </uap:VisualElements>
+    </Application>
+  </Applications>
+
+  <Capabilities>
+    <rescap:Capability Name="runFullTrust" />
+    <!-- 语音输入（Windows.Media.SpeechRecognition）需要麦克风 -->
+    <DeviceCapability Name="microphone" />
+  </Capabilities>
+</Package>

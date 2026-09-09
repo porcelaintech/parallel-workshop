@@ -1,0 +1,45 @@
+{
+  "id": "doubao",
+  "name": "豆包",
+  "origin": "https://www.doubao.com/chat/",
+  "input": {
+    "selectors": [
+      "div.tiptap.ProseMirror[contenteditable='true'][role='textbox']",
+      "div[role='textbox'][contenteditable='true']",
+      "div[contenteditable='true']",
+      "textarea"
+    ]
+  },
+  "send": {
+    "type": "button",
+    "selectors": [
+      "button#flow-end-msg-send",
+      "button[id*='msg-send']",
+      "button[aria-label='发送']",
+      "button[aria-label='Send']"
+    ]
+  },
+  "probe": {
+    "loggedOut": [
+      "xpath://button[normalize-space()='登录']"
+    ],
+    "loginModal": [
+      "xpath://*[contains(@class,'modal') and (contains(.,'扫码登录') or contains(.,'手机号登录'))]"
+    ],
+    "challenge": [
+      "iframe[title*='验证' i]",
+      "iframe[title*='captcha' i]",
+      "xpath://*[contains(text(),'安全验证')]"
+    ]
+  },
+  "international": false,
+  "homeHosts": [
+    "www.doubao.com",
+    "doubao.com"
+  ],
+  "attachment": {
+    "selectors": [
+      "input[type=file]"
+    ]
+  }
+}

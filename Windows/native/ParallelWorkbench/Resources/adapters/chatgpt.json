@@ -1,0 +1,51 @@
+{
+  "id": "chatgpt",
+  "name": "ChatGPT",
+  "origin": "https://chatgpt.com/",
+  "input": {
+    "selectors": [
+      "textarea#prompt-textarea",
+      "textarea[id*='composer-prompt']",
+      "textarea.wm-composer-textarea",
+      "div#prompt-textarea",
+      "div[contenteditable='true']",
+      "textarea"
+    ]
+  },
+  "send": {
+    "type": "button",
+    "selectors": [
+      "button[aria-label='Send message']",
+      "button.wm-compose",
+      "button[data-testid='send-button']",
+      "button[data-testid='composer-submit-button']"
+    ]
+  },
+  "probe": {
+    "loggedOut": [],
+    "loginModal": [
+      "xpath://*[contains(@class,'modal') and contains(text(),'Log in')]",
+      "xpath://*[contains(@class,'modal') and contains(text(),'登录')]"
+    ],
+    "challenge": [
+      "#challenge-stage",
+      "iframe[title*='challenge' i]",
+      "xpath://*[contains(text(),'Verify you are human')]",
+      "xpath://*[contains(text(),'确认您是人类')]"
+    ]
+  },
+  "international": true,
+  "verify": {
+    "responseIndicator": "ChatGPT said"
+  },
+  "homeHosts": [
+    "chatgpt.com",
+    "chat.openai.com",
+    "auth.openai.com"
+  ],
+  "attachment": {
+    "selectors": [
+      "input.wm-composer-srOnly"
+    ]
+  }
+}

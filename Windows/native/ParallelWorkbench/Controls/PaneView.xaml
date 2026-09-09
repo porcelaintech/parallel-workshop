@@ -1,0 +1,65 @@
+<UserControl
+    x:Class="ParallelWorkbench.Controls.PaneView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    MinWidth="420">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- 标题栏：平台名 + 状态角标 + 缩放/放大/刷新 -->
+        <Grid Grid.Row="0" Padding="8,3,8,3" ColumnSpacing="4"
+              Background="{ThemeResource ControlFillColorDefaultBrush}">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock x:Name="NameText" Grid.Column="0" FontSize="12" FontWeight="SemiBold"
+                       VerticalAlignment="Center" Margin="0,0,6,0"
+                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+            <Border x:Name="StatusBadge" Grid.Column="1" CornerRadius="8" Padding="6,2,6,2"
+                    VerticalAlignment="Center" Background="#FF8A8A8A">
+                <TextBlock x:Name="StatusText" FontSize="10" Foreground="White"/>
+            </Border>
+            <Button Grid.Column="3" Content="&#x2212;" FontSize="12" Padding="8,2,8,2"
+                    Click="ZoomOut_Click" ToolTipService.ToolTip="缩小页面"/>
+            <Button Grid.Column="4" x:Name="ZoomText" FontSize="11" Padding="6,2,6,2"
+                    Click="ZoomReset_Click" ToolTipService.ToolTip="点击恢复 100%"/>
+            <Button Grid.Column="5" Content="&#xFF0B;" FontSize="12" Padding="8,2,8,2"
+                    Click="ZoomIn_Click" ToolTipService.ToolTip="放大页面"/>
+            <Button Grid.Column="6" x:Name="FocusButton" FontSize="12" Padding="8,2,8,2"
+                    Click="Focus_Click"/>
+            <Button Grid.Column="7" x:Name="ReloadButton" Content="&#x21BB;" FontSize="12" Padding="8,2,8,2"
+                    Click="Reload_Click" ToolTipService.ToolTip="重新加载该窗口"/>
+        </Grid>
+
+        <!-- WebView2 主体 + 覆盖层 -->
+        <Grid Grid.Row="1">
+            <Grid x:Name="WebHost"/>
+            <StackPanel HorizontalAlignment="Right" VerticalAlignment="Top" Margin="8" Spacing="4">
+                <Button x:Name="GoHomeButton" Style="{StaticResource AccentButtonStyle}" FontSize="11"
+                        Padding="10,4,10,4" Visibility="Collapsed"
+                        Click="GoHome_Click" Content="&#x1F3E0; 回到对话"/>
+                <Border x:Name="ToastBorder" Background="#B3000000" CornerRadius="12" Padding="10,4,10,4"
+                        Visibility="Collapsed" IsHitTestVisible="False">
+                    <TextBlock x:Name="ToastText" FontSize="11" Foreground="White" MaxWidth="320" TextWrapping="Wrap"/>
+                </Border>
+            </StackPanel>
+            <Border x:Name="LoggedOutHint" VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="8"
+                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" CornerRadius="12"
+                    Padding="10,4,10,4" Visibility="Collapsed" IsHitTestVisible="False">
+                <TextBlock FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                           Text="在此窗格内登录（右上角放大更方便）"/>
+            </Border>
+        </Grid>
+    </Grid>
+</UserControl>

@@ -43,6 +43,21 @@ swift scripts/icon.swift build/AppIcon.iconset
 iconutil -c icns build/AppIcon.iconset -o build/AppIcon.icns
 cp build/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 
+# 渠道：direct（Developer ID/DMG 直发，bundle id 保持历史值以兼容既有登录态）
+#       appstore（Mac App Store：反向域名 bundle id + PWBChannel 标记，更新检查自动关闭）
+CHANNEL="${PWB_CHANNEL:-direct}"
+if [ "$CHANNEL" = "appstore" ]; then
+  BUNDLE_ID="com.porcelaintech.braintrust"
+  CHANNEL_KEYS="	<key>PWBChannel</key>
+	<string>appstore</string>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.productivity</string>"
+else
+  BUNDLE_ID="ParallelWorkbench"
+  CHANNEL_KEYS="	<key>PWBChannel</key>
+	<string>direct</string>"
+fi
+
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -55,7 +70,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 	<key>CFBundleExecutable</key>
 	<string>ParallelWorkbench</string>
 	<key>CFBundleIdentifier</key>
-	<string>ParallelWorkbench</string>
+	<string>${BUNDLE_ID}</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -72,6 +87,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 	<string>用于将你的语音转成文字并填入提问输入框</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>用于语音输入提问</string>
+${CHANNEL_KEYS}
 </dict>
 </plist>
 PLIST
