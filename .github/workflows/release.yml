@@ -106,11 +106,11 @@ jobs:
         shell: pwsh
         run: |
           $cert = New-SelfSignedCertificate -Type Custom -Subject "CN=ParallelWorkbenchDev" `
+            -KeyAlgorithm RSA -KeyLength 2048 -HashAlgorithm SHA256 -KeyExportPolicy Exportable `
             -KeyUsage DigitalSignature -FriendlyName "PWB CI dev" `
             -CertStoreLocation "Cert:\CurrentUser\My" `
             -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.3","2.5.29.19={text}")
-          $pwd = ConvertTo-SecureString -String "pwb-ci-dev" -Force -AsPlainText
-          Export-PfxCertificate -Cert $cert -FilePath cert.pfx -Password $pwd
+          Write-Host "证书指纹: $($cert.Thumbprint)"
 
       - name: 构建 MSIX
         shell: pwsh
@@ -126,8 +126,7 @@ jobs:
             /p:AppxBundle=Never /p:AppxPackageDir="$PWD\artifacts" `
             /p:GenerateAppxPackageOnBuild=true `
             /p:AppxPackageSigningEnabled=true `
-            /p:PackageCertificateKeyFile="$PWD\cert.pfx" `
-            /p:PackageCertificatePassword=pwb-ci-dev `
+            /p:PackageCertificateThumbprint="$((Get-ChildItem Cert:\CurrentUser\My | Where-Object Subject -eq 'CN=ParallelWorkbenchDev' | Select-Object -First 1).Thumbprint)" `
             /m
 
       - name: 规整产物名
