@@ -24,7 +24,7 @@ jobs:
       - name: 版本号（统一事实源：Edge manifest）
         id: ver
         run: |
-          V=$(python3 -c 'import json; print(json.load(open("Windows/edge-extension/manifest.json"))["version"])')
+          V=$(node -p "require('./Windows/edge-extension/manifest.json').version")
           echo "version=$V" >> "$GITHUB_OUTPUT"
           echo "版本: $V"
 
@@ -89,7 +89,7 @@ jobs:
         id: ver
         shell: bash
         run: |
-          V=$(python3 -c 'import json; print(json.load(open("Windows/edge-extension/manifest.json"))["version"])' 2>/dev/null || python -c 'import json; print(json.load(open("Windows/edge-extension/manifest.json"))["version"])')
+          V=$(node -p "require('./Windows/edge-extension/manifest.json').version")
           echo "version=$V" >> "$GITHUB_OUTPUT"
           echo "版本: $V"
 
