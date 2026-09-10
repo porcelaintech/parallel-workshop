@@ -152,7 +152,7 @@ try {
     $script:httpCalls = @()
     $script:indexResponse = [pscustomobject]@{ schemaVersion = 1; version = $version; edgeURL = "https://github.com/porcelaintech/parallel-workshop/releases/download/v$version/edge-extension.zip"; edgeSHA256 = $digest }
     Update-IfAvailable $currentDir
-    Assert-True (@($script:httpCalls | Where-Object { $_.Download }).Count -eq 0) 'Same-version index must not trigger a download'
+    Assert-True (@($script:httpCalls | Where-Object { $_.PSObject.Properties.Name -contains 'Download' -and $_.Download }).Count -eq 0) 'Same-version index must not trigger a download'
 
     $nextVersion = '9.8.7'
     $nextURL = "https://github.com/porcelaintech/parallel-workshop/releases/download/v$nextVersion/edge-extension.zip"
