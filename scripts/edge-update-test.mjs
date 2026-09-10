@@ -425,7 +425,7 @@ if (sideLoaded.updateChecks !== 0 || sideLoaded.reloads !== 0 || sideLoaded.obje
   throw new Error('侧载版与商店更新路径发生了串路');
 }
 assert.equal(sideLoaded.state, 'downloaded');
-assert.match(sideLoaded.status, /install\.bat.*启用新版/, '侧载版必须说明实际安装步骤');
+assert.match(sideLoaded.status, /install\.bat.*自动完成更新/, '侧载版必须说明实际安装步骤（运行 install.bat 或重启智囊自动更新）');
 assert.notEqual(sideLoaded.window.document.getElementById('update-banner').style.display, 'none');
 sideLoaded.dom.window.close();
 

@@ -2,11 +2,14 @@
   'use strict';
   if (window.self !== window.top) return;
   const PENDING_KEY = 'wb-pending-extension-reload';
+  const ONBOARDED_KEY = 'wb-onboarded';
   const progress = document.getElementById('launch-progress');
   const status = document.getElementById('launch-status');
   const version = document.getElementById('launch-version');
   const retry = document.getElementById('launch-retry');
   const help = document.getElementById('launch-help');
+  const onboarding = document.getElementById('launch-onboarding');
+  const onboardingDone = document.getElementById('launch-onboarding-done');
   let launching = false;
 
   function show(step, message) {
@@ -67,6 +70,30 @@
     }
   }
 
+  async function ensureOnboarded() {
+    try {
+      const stored = await chrome.storage.local.get(ONBOARDED_KEY);
+      if (stored[ONBOARDED_KEY]) { launch(); return; }
+      // 首次使用：展示一次入口/登录/更新说明，点击后进入工作台并记录完成状态。
+      progress.hidden = true;
+      status.hidden = true;
+      version.hidden = true;
+      retry.hidden = true;
+      help.hidden = true;
+      onboarding.hidden = false;
+      onboardingDone.addEventListener('click', async () => {
+        try { await chrome.storage.local.set({ [ONBOARDED_KEY]: true }); } catch {}
+        onboarding.hidden = true;
+        progress.hidden = false;
+        status.hidden = false;
+        version.hidden = false;
+        launch();
+      });
+    } catch {
+      launch();
+    }
+  }
+
   retry.addEventListener('click', launch);
-  launch();
+  ensureOnboarded();
 })();

@@ -1,7 +1,7 @@
 // 仅用于隔离 Edge profile：真实验证工具栏逻辑会把当前 about:blank 原地替换为工作台。
 import { assertCleanWorkbenchTargets, cdpCommand, ensureSingleWorkbenchPage, listEdgeTargets } from './edge-workbench-target.mjs';
 
-const EXT_ID = process.argv[2] || 'eeppnjgcjioaohaaoaknkkafhodccmmf';
+const EXT_ID = process.argv[2] || 'mklpdfdkbchlahfahofajchfjphlpkek';
 const PORT = Number(process.env.PWB_EDGE_PORT || 9223);
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 

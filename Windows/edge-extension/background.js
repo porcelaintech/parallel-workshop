@@ -151,7 +151,18 @@ const reloadRecovery = (async () => {
 
 chrome.runtime.onInstalled.addListener((details) => {
   reloadRecovery.then(recovered => {
-    if (!recovered && details.reason === 'install') return openWorkbenchFromAction();
+    if (recovered || details.reason !== 'install') return;
+    // 命令行加载（--load-extension）每次会话都触发 install 事件；此时启动 URL 会自行打开工作台。
+    // 先等启动页注册（最多 30 秒，覆盖冷启动首屏/同步弹窗拖慢标签加载的情况）避免重复弹窗；
+    // 期间没有任何入口时才自动打开（策略安装的 CRX 没有命令行 URL，需要此自动入口）。
+    const deadline = Date.now() + 30000;
+    (async () => {
+      while (Date.now() < deadline) {
+        if ((await workbenchEntries()).length) return;
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      await openWorkbenchFromAction();
+    })().catch(() => {});
   }).catch(error => console.warn('无法打开智囊入口', error));
 });
 
@@ -221,64 +232,17 @@ function validatedDeepSeekCallback(raw) {
   }
 }
 
-async function attachDebugger(tabId, timeoutMs) {
-  return await new Promise((resolve, reject) => {
-    let settled = false;
-    const timer = setTimeout(() => {
-      settled = true;
-      reject(new Error('调试器连接超时'));
-    }, timeoutMs);
-    chrome.debugger.attach({ tabId }, '1.3', () => {
-      const error = chrome.runtime.lastError;
-      if (settled) {
-        if (!error) chrome.debugger.detach({ tabId }, () => {});
-        return;
-      }
-      settled = true;
-      clearTimeout(timer);
-      if (error) reject(new Error(error.message));
-      else resolve(true);
-    });
-  });
-}
-
-async function dispatchAttachment(tabId, msg) {
-  const { x, y, items, mask } = msg;
-  if (typeof x !== 'number' || typeof y !== 'number' || !Array.isArray(items)) {
-    return { ok: false, error: 'bad-args' };
-  }
-  await attachDebugger(tabId, 5000);
-  const send = (method, params) => new Promise((resolve, reject) => {
-    chrome.debugger.sendCommand({ tabId }, method, params, (result) => {
-      const error = chrome.runtime.lastError;
-      if (error) reject(new Error(error.message));
-      else resolve(result);
-    });
-  });
-  try {
-    await send('Page.enable');
-    // CDP 只能投递 MIME 数据；真实 File 需要本机文件路径，因此本通道始终是尽力而为。
-    const data = {
-      items: items.map(it => ({ mimeType: it.mime, data: it.data })),
-      dragOperationsMask: typeof mask === 'number' ? mask : 1
-    };
-    const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-    await send('Input.dispatchDragEvent', { type: 'dragEnter', x, y, data });
-    await sleep(150);
-    await send('Input.dispatchDragEvent', { type: 'dragOver', x, y, data });
-    await sleep(100);
-    await send('Input.dispatchDragEvent', { type: 'drop', x, y, data });
-    return { ok: true };
-  } finally {
-    chrome.debugger.detach({ tabId }, () => {});
-  }
-}
+// 附件投递说明：v0.4.1 起由工作台直接 chrome.scripting.executeScript(world:'MAIN')
+// 注入目标帧执行（见 workbench.js dropFilesInFrame），不再经过 background 与 debugger。
+// 这彻底移除了 debugger 权限与每次投递时的「已开始调试此浏览器」横幅。
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (!msg || typeof msg !== 'object') return false;
 
   if (msg.type === 'WB_LAUNCH_READY') {
-    if (sender?.id !== chrome.runtime.id || sender.frameId !== 0 || sender.url !== LAUNCH_URL || !Number.isInteger(sender.tab?.id)) {
+    // 兼容带 #fragment 的启动页 URL（历史入口会追加锚点）
+    const senderPath = String(sender?.url || '').split('#')[0];
+    if (sender?.id !== chrome.runtime.id || sender.frameId !== 0 || senderPath !== LAUNCH_URL || !Number.isInteger(sender.tab?.id)) {
       sendResponse({ ok: false });
       return false;
     }
@@ -346,17 +310,6 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       }).catch(() => {});
       sendResponse({ ok: true });
     }).catch(() => sendResponse({ ok: false }));
-    return true;
-  }
-
-  if (msg.type === 'WB_ATTACH') {
-    if (!trustedWorkbenchSender(sender) || msg.tabId !== sender.tab.id) {
-      sendResponse({ ok: false, error: 'untrusted-sender' });
-      return false;
-    }
-    dispatchAttachment(sender.tab.id, msg)
-      .then(sendResponse)
-      .catch(error => sendResponse({ ok: false, error: String(error) }));
     return true;
   }
 

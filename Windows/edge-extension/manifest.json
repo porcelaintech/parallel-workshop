@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "minimum_chrome_version": "116",
   "name": "智囊 · Braintrust",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "智囊 Braintrust：一个问题，多位 AI 同时思考。支持 ChatGPT、DeepSeek、豆包、Kimi、通义千问与文心一言。",
   "icons": {
     "16": "icons/16.png",
@@ -11,12 +11,10 @@
     "128": "icons/128.png"
   },
   "permissions": [
-    "activeTab",
     "declarativeNetRequest",
     "storage",
     "scripting",
-    "webNavigation",
-    "debugger"
+    "webNavigation"
   ],
   "host_permissions": [
     "https://www.doubao.com/*",
@@ -52,7 +50,7 @@
       "32": "icons/32.png"
     }
   },
-  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAtMLWrubqowsX7T7iFP9+yhkM7Fcwqy556bG5KlC0JaxHk4Y8Ouw7HaZGJEi2h/sWWUM9L/TYhFjJlno2cnc+HaFvuu1fx+GJLIEOjJASU9S4bH/AUela0k91wy8OACv3vA9WwsL/2nm+UBlkl9so+1v/R68x/diIp6CKgRLbPFXFshrL+gMfd+tSZeVJQZG1bRgXShv0smY2n5/qUGt8iAWnwYjCEQU8w0o4An7OPz8F80SJaDLrPhVjh/Z6osFKlGPpeZXoCj0C8sN4qzaTUIF+InmgDI/M93V7f1OA04tIcX4b+V99iW/AKMmNDe43si61/hojQMmZYICfBAQfTwIDAQAB",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAqf16kba9ozEJ1v9PsGG5MUEj3650Y4b/L7asL+77UF2oFQjpyyFmrE7M+PrlukH68QMS31VYSrKqQzv6ZASga+qghEmySj1NfXaGja+PJuYZJ4Utf8O71GS/Fty5nBAiZp9foh+7Eeo5SeE7TZXODTgUvs0zxefMdV6XJa5YXLlU6gRDlh4p4ic826BV8c2qsfl1kVya8WTc7v1Nt1fnOAk+N3p56UW5TH8PcxPnl7c/7ehA6imhTSkfC5OJw7HeX9AwUJ9sFmDfiIUl0L2m4+U2bsdnrg+slHAE2UzLgVsfnDzoHTV+LWv1z9JFCXF+B3QU+ExCymQ+ZJD0ymygJQIDAQAB",
   "content_scripts": [
     {
       "matches": [

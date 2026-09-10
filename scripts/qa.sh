@@ -8,8 +8,8 @@ PWB_QA_ARCH="${PWB_QA_ARCH:-$(uname -m)}"
 if [ "$PWB_QA_ARCH" = "x86_64" ]; then PWB_BUILD_TRIPLE="x86_64-apple-macosx"; else PWB_QA_ARCH="arm64"; PWB_BUILD_TRIPLE="arm64-apple-macosx"; fi
 
 echo "==> 1/4 Swift 构建"
-swift build --arch "$PWB_QA_ARCH" 2>&1 | tail -1 || { echo "❌ 构建失败"; exit 1; }
-swift test --arch "$PWB_QA_ARCH" || { echo "❌ Swift 单元测试失败"; exit 1; }
+swift build --disable-sandbox --arch "$PWB_QA_ARCH" 2>&1 | tail -1 || { echo "❌ 构建失败"; exit 1; }
+swift test --disable-sandbox --arch "$PWB_QA_ARCH" || { echo "❌ Swift 单元测试失败"; exit 1; }
 
 # 刷新测试器副本（SelfTest 等 Swift 代码编译进二进制，必须同步；inject.js 运行时从资源加载。
 # 注意目标可执行名是 WorkbenchTester；改名保持单实例守护的进程名约定）
@@ -73,6 +73,33 @@ node scripts/windows-installer-contract-test.mjs || FAIL=1
 node scripts/windows-device-harness-contract-test.mjs || FAIL=1
 node scripts/release-pipeline-contract-test.mjs || FAIL=1
 node scripts/update-manifest-test.mjs || FAIL=1
+
+# 自托管 CRX 与 updates.xml 校验（有签名私钥时必查）
+CRX_KEY="${PWB_CRX_KEY:-keys/edge-extension.pem}"
+if [ -f "$CRX_KEY" ]; then
+  CRX="$(ls build/edge-extension-*.crx 2>/dev/null | head -1)"
+  if [ -z "$CRX" ]; then echo "❌ 未生成自托管 CRX"; FAIL=1
+  else
+    node --input-type=module --check < scripts/pack-crx.mjs || FAIL=1
+    node --input-type=module --check < scripts/generate-updates-xml.mjs || FAIL=1
+    node - "$CRX" <<'EOF' || FAIL=1
+import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+const crx = readFileSync(process.argv[2]);
+if (crx.subarray(0, 4).toString('binary') !== 'Cr24') { throw new Error('CRX magic 无效'); }
+const version = crx.readUInt32LE(4);
+if (version !== 3) { throw new Error(`CRX 版本不是 3: ${version}`); }
+const headerLength = crx.readUInt32LE(8);
+if (headerLength < 1 || headerLength > crx.length - 12) { throw new Error('CRX header 长度非法'); }
+EOF
+    [ -f build/updates.xml ] || { echo "❌ 未生成 updates.xml"; FAIL=1; }
+    grep -q "appid='mklpdfdkbchlahfahofajchfjphlpkek'" build/updates.xml || { echo "❌ updates.xml 扩展 ID 不匹配"; FAIL=1; }
+    grep -q 'update2/response' build/updates.xml || { echo "❌ updates.xml 协议命名空间错误"; FAIL=1; }
+    echo "    CRX/updates.xml 校验通过"
+  fi
+else
+  echo "⚠️ 无扩展签名私钥，跳过 CRX 校验"
+fi
 echo "    语法与 JSON 校验通过"
 
 echo "==> 4/4 扩展胶水层 jsdom 冒烟测试"

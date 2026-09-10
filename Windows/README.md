@@ -1,6 +1,6 @@
 # 智囊 · Braintrust — Windows/Edge 版
 
-v0.4.0 是当前稳定版。
+v0.4.1 是当前稳定版。
 
 > 本目录是 **Windows 产品入口**。macOS 用户请使用仓库根目录下 `macOS/` 目录（或直接执行 `install.sh`）。
 

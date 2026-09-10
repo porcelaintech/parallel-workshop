@@ -23,7 +23,7 @@
    - 简短说明：多模型平行问答：一次提问，ChatGPT/DeepSeek/豆包/Kimi/通义/文心并排回答
    - 详细说明：见 `Windows/edge-extension/STORE_LISTING.md`
    - 隐私政策：扩展不运营自己的中转服务器；问题和附件只发送到用户勾选的第三方 AI 平台，登录态保存在浏览器配置中
-   - 权限说明：activeTab（工具栏从空白页启动时原地复用）、declarativeNetRequest（仅工作台 tab 内的 iframe）、storage、scripting、webNavigation、debugger（尽力而为的附件拖放）
+   - 权限说明：declarativeNetRequest（仅工作台 tab 内的 iframe 剥离 CSP/X-Frame-Options）、storage（偏好与一次性引导）、scripting（探测与帧内附件投递）、webNavigation（帧定位与启动恢复）；v0.4.1 起已移除 debugger 与 activeTab
    - 注意：提交前按 Partner Center 提示处理 manifest 中的 `key` 字段（商店会分配正式 ID）
 4. 审核通过后：用户在商店一键安装
 

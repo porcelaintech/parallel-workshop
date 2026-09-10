@@ -56,6 +56,11 @@ function Invoke-BoundedPowerShell([string]$ScriptPath, [string[]]$Arguments, [st
     $startInfo.CreateNoWindow = $true
     $startInfo.RedirectStandardOutput = $true
     $startInfo.RedirectStandardError = $true
+    # 子进程（launch.ps1 -PrintOnly）固定输出 UTF-8；这里同样按 UTF-8 解码，避免中文路径被 OEM 代码页吞成 ?
+    try {
+        $startInfo.StandardOutputEncoding = [Text.Encoding]::UTF8
+        $startInfo.StandardErrorEncoding = [Text.Encoding]::UTF8
+    } catch {}
 
     $process = New-Object Diagnostics.Process
     $process.StartInfo = $startInfo
@@ -203,9 +208,11 @@ try {
         '-InstallRoot', $installRoot,
         '-NoLaunch', '-NoShortcuts', '-NoClipboard'
     ) 'bootstrap.install.first'
-    $installed = Join-Path $installRoot 'edge-extension'
+    $currentFile = Join-Path $installRoot 'current.txt'
+    if (-not (Test-Path -LiteralPath $currentFile -PathType Leaf)) { throw '首次安装后 current.txt 不存在' }
+    $installed = Join-Path $installRoot ('edge-extension-' + (((Get-Content -LiteralPath $currentFile -Raw -Encoding UTF8) -replace [char]0xFEFF).Trim()))
     $manifestPath = Join-Path $installed 'manifest.json'
-    if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) { throw '首次安装后 manifest.json 不存在' }
+    if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) { throw '首次安装后版本化目录 manifest.json 不存在' }
     $manifest = Get-Content -LiteralPath $manifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
     $manifestVersion = [string]$manifest.version
     if ($manifestVersion -notmatch '^\d+\.\d+\.\d+(?:\.\d+)?$') { throw '安装后的 manifest 版本无效' }
@@ -232,18 +239,17 @@ try {
     if ($launchLine.Count -ne 1) { throw 'launch -PrintOnly 未返回 JSON' }
     $launchProbe = $launchLine[0] | ConvertFrom-Json
     if (-not (Test-Path -LiteralPath ([string]$launchProbe.EdgePath) -PathType Leaf)) { throw 'launch -PrintOnly 返回的 Edge 路径无效' }
-    if ([string]$launchProbe.WorkbenchURL -ne 'chrome-extension://eeppnjgcjioaohaaoaknkkafhodccmmf/launch.html') {
+    if ([string]$launchProbe.WorkbenchURL -ne 'chrome-extension://mklpdfdkbchlahfahofajchfjphlpkek/launch.html') {
         throw 'launch -PrintOnly 返回的工作台 URL 无效'
     }
-    $expectedStartURL = [Uri]::new((Join-Path $installed 'start.html'), [UriKind]::Absolute).AbsoluteUri
-    if ([string]$launchProbe.StartURL -ne $expectedStartURL -or -not ([string]$launchProbe.Arguments).Contains($expectedStartURL)) {
-        throw 'launch -PrintOnly 未使用本次安装的可见启动页'
+    if (-not ([string]$launchProbe.Arguments).Contains('--load-extension="' + $installed + '"')) {
+        throw 'launch -PrintOnly 未用命令行加载本次安装的扩展'
     }
-    if ([string]$launchProbe.Arguments -match 'about:blank|--user-data-dir') {
-        throw '启动参数触碰 blank 预热或独立 Edge profile'
+    if (-not ([string]$launchProbe.Arguments).Contains('--user-data-dir=')) {
+        throw 'launch -PrintOnly 未使用独立 Edge 配置档（已运行 Edge 场景下命令行参数会失效）'
     }
-    if ([string]$launchProbe.ProfileDirectory -notmatch '^(Default|Profile \d+)$') {
-        throw '启动参数未选择有效的现有 Edge profile'
+    if ([string]$launchProbe.Arguments -match 'about:blank') {
+        throw '启动参数触碰 blank 预热'
     }
 } catch {
     $failure = $_.Exception.Message

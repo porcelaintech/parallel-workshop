@@ -7,11 +7,15 @@ const launch = readFileSync(root + 'Windows/edge-extension/launch.js', 'utf8');
 const workbench = readFileSync(root + 'Windows/edge-extension/workbench.js', 'utf8');
 const start = readFileSync(root + 'Windows/edge-extension/start.js', 'utf8');
 
-async function boot({ running = '0.3.1', installed = running, previous, embedded = false, readError = false } = {}) {
+async function boot({ running = '0.3.1', installed = running, previous, embedded = false, readError = false, firstRun = false } = {}) {
   const calls = [];
   const elements = new Map();
   const document = { getElementById: id => {
-    if (!elements.has(id)) elements.set(id, { hidden: true, addEventListener() {}, textContent: '', value: 0 });
+    if (!elements.has(id)) elements.set(id, {
+      hidden: true, textContent: '', value: 0,
+      addEventListener(type, fn) { (this._listeners ||= {})[type] = fn; },
+      click() { const fn = this._listeners?.click; if (fn) fn(); }
+    });
     return elements.get(id);
   } };
   const window = {};
@@ -27,7 +31,9 @@ async function boot({ running = '0.3.1', installed = running, previous, embedded
     },
     tabs: { getCurrent: async () => ({ id: 9 }) },
     storage: { local: {
-      get: async () => ({ 'wb-pending-extension-reload': previous }),
+      get: async () => firstRun
+        ? { 'wb-pending-extension-reload': previous }
+        : { 'wb-onboarded': true, 'wb-pending-extension-reload': previous },
       set: async value => calls.push(['set', value])
     } }
   };
@@ -39,7 +45,15 @@ async function boot({ running = '0.3.1', installed = running, previous, embedded
   runInNewContext(launch, { window, document, chrome, fetch, AbortController, setTimeout, clearTimeout, console });
   await new Promise(resolve => setTimeout(resolve, 0));
   await new Promise(resolve => setTimeout(resolve, 0));
-  return { calls, elements };
+  let onboardingWasVisible = false;
+  if (firstRun) {
+    const done = elements.get('launch-onboarding-done');
+    onboardingWasVisible = !elements.get('launch-onboarding').hidden;
+    if (done) done.click?.();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    await new Promise(resolve => setTimeout(resolve, 0));
+  }
+  return { calls, elements, onboardingWasVisible };
 }
 
 const current = await boot();
@@ -55,8 +69,13 @@ assert.equal(repeated.calls.filter(call => call[0] === 'reload').length, 0, '相
 assert.equal(repeated.elements.get('launch-retry').hidden, false);
 assert.equal((await boot({ readError: true })).calls.filter(call => call[0] === 'reload').length, 0);
 assert.equal((await boot({ embedded: true, installed: '0.4.0' })).calls.length, 0, '嵌入的launch不可读取版本、发消息或reload');
+// 首次运行：引导页出现、点击「开始使用」后进入启动流程并写入完成标记
+const first = await boot({ firstRun: true });
+assert.equal(first.onboardingWasVisible, true, '首次运行必须展示引导页');
+assert.equal(first.calls.filter(call => call[0] === 'ready').length, 1, '点击开始使用后必须进入启动流程');
+assert.equal(first.calls.find(call => call[0] === 'set')[1]['wb-onboarded'], true, '必须持久化引导完成标记');
 runInNewContext(workbench, { window: { self: {}, top: {} }, chrome: new Proxy({}, { get() { throw new Error('嵌入workbench调用了扩展API'); } }) });
-assert.match(start, /workbench\.html/, '旧版本升级须使用已公开的workbench入口');
-assert.match(start, /#launch/, '本地入口必须经过统一launch以复用已有工作台');
+assert.match(start, /launch\.html/, '本地入口必须导航到统一启动页');
 assert.match(start, /Date\.now\(\) \+ 15000/, '未安装时必须有限等待');
-console.log('✅ 启动页：版本一致直达、旧运行版单次reload、回环保护、读取失败、外部iframe拒绝、旧版入口兼容');
+assert.match(start, /location\.replace\(launchURL\)/, '轮询未果时必须有兜底导航');
+console.log('✅ 启动页：版本一致直达、旧运行版单次reload、回环保护、读取失败、外部iframe拒绝、首次引导、本地入口兼容');

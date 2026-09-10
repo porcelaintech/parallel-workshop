@@ -161,7 +161,9 @@ jobs:
             .\install-windows.ps1 -ArchivePath "$env:RUNNER_TEMP\edge-extension.zip" -InstallRoot $target -NoLaunch -NoShortcuts -NoClipboard
           }
           if ($elapsed.TotalSeconds -gt 120) { throw "Installer took $($elapsed.TotalSeconds) seconds" }
-          $installed = Join-Path $target 'edge-extension'
+          $currentFile = Join-Path $target 'current.txt'
+          if (-not (Test-Path $currentFile)) { throw 'current.txt missing after install' }
+          $installed = Join-Path $target ('edge-extension-' + ((Get-Content $currentFile -Raw -Encoding UTF8).Trim()))
           if (-not (Test-Path (Join-Path $installed 'manifest.json'))) { throw 'manifest missing after install' }
           $expectedVersion = (Get-Content 'Windows\edge-extension\manifest.json' -Raw | ConvertFrom-Json).version
           if ((Get-Content (Join-Path $installed 'manifest.json') -Raw | ConvertFrom-Json).version -ne $expectedVersion) { throw 'version mismatch' }
@@ -169,14 +171,16 @@ jobs:
           $recordedPath = (Get-Content (Join-Path $target 'EXTENSION_PATH.txt') -Raw -Encoding UTF8).Trim()
           if ($recordedPath -ne $installed) { throw 'EXTENSION_PATH.txt mismatch' }
           $launch = & (Join-Path $installed 'launch.ps1') -PrintOnly | ConvertFrom-Json
-          if ($launch.WorkbenchURL -ne 'chrome-extension://eeppnjgcjioaohaaoaknkkafhodccmmf/launch.html') { throw 'launcher URL mismatch' }
-          $expectedStartURL = [Uri]::new((Join-Path $installed 'start.html'), [UriKind]::Absolute).AbsoluteUri
-          if ($launch.StartURL -ne $expectedStartURL -or -not $launch.Arguments.Contains($expectedStartURL)) { throw 'visible startup page URL mismatch' }
+          if ($launch.WorkbenchURL -ne 'chrome-extension://mklpdfdkbchlahfahofajchfjphlpkek/launch.html') { throw 'launcher URL mismatch' }
+          if (-not $launch.Arguments.Contains('--load-extension="' + $installed + '"')) { throw 'launcher must load the installed extension via command line' }
+          if (-not $launch.Arguments.Contains('--user-data-dir=')) { throw 'launcher must use a dedicated Edge profile' }
+          if ($launch.Arguments -match 'about:blank') { throw 'launcher must not warm blank tabs' }
       - name: Verify idempotent reinstall and source-in-target update
         shell: powershell
         run: |
           $target = Join-Path $env:RUNNER_TEMP $env:PWB_TEST_INSTALL_RELATIVE
-          $source = Join-Path $target 'edge-extension'
+          $currentFile = Join-Path $target 'current.txt'
+          $source = Join-Path $target ('edge-extension-' + ((Get-Content $currentFile -Raw -Encoding UTF8).Trim()))
           Push-Location $source
           try {
             & '.\install.ps1' -SourceDir $source -TargetRoot $target -NoLaunch -NoShortcuts -NoClipboard
@@ -184,8 +188,11 @@ jobs:
             Pop-Location
           }
           $expectedVersion = (Get-Content 'Windows\edge-extension\manifest.json' -Raw | ConvertFrom-Json).version
-          if ((Get-Content (Join-Path $target 'edge-extension\manifest.json') -Raw | ConvertFrom-Json).version -ne $expectedVersion) {
+          if ((Get-Content (Join-Path $source 'manifest.json') -Raw | ConvertFrom-Json).version -ne $expectedVersion) {
             throw 'idempotent reinstall failed'
+          }
+          if ((Get-Content (Join-Path $target 'current.txt') -Raw -Encoding UTF8).Trim() -ne $expectedVersion) {
+            throw 'current.txt drifted'
           }
           if (@(Get-ChildItem -LiteralPath $target -Force | Where-Object { $_.Name -like '.edge-extension.*' }).Count -ne 0) {
             throw 'installer left staging or backup directories behind'
@@ -205,18 +212,28 @@ jobs:
             '-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', $encoded
           ) -Wait -PassThru -NoNewWindow
           if ($process.ExitCode -eq 0) { throw 'malformed archive incorrectly returned exit code 0' }
+      - name: Verify enterprise policy mode refuses non-domain machines
+        shell: powershell
+        run: |
+          $target = Join-Path $env:RUNNER_TEMP 'enterprise must not install'
+          $refused = $false
+          try {
+            .\install-windows.ps1 -ArchivePath "$env:RUNNER_TEMP\edge-extension.zip" -InstallRoot $target -NoLaunch -NoShortcuts -NoClipboard -Enterprise
+          } catch {
+            $refused = ($_.Exception.Message -match 'Active Directory')
+          }
+          if (-not $refused) { throw 'enterprise mode must refuse non-domain-joined machines with the official constraint message' }
+          if (Test-Path $target) { throw 'enterprise refusal must not install any files' }
       - name: Verify installed package in real Windows Edge
         shell: powershell
         run: |
-          git fetch origin tag v0.3.1 --depth=1
-          if ($LASTEXITCODE -ne 0) { throw 'Could not fetch the actual published v0.3.1 upgrade fixture' }
-          $installed = Join-Path (Join-Path $env:RUNNER_TEMP $env:PWB_TEST_INSTALL_RELATIVE) 'edge-extension'
+          $target = Join-Path $env:RUNNER_TEMP $env:PWB_TEST_INSTALL_RELATIVE
+          $installed = Join-Path $target ('edge-extension-' + ((Get-Content (Join-Path $target 'current.txt') -Raw -Encoding UTF8).Trim()))
           $launch = & (Join-Path $installed 'launch.ps1') -PrintOnly | ConvertFrom-Json
           $env:PWB_EDGE_BINARY = $launch.EdgePath
           $env:PWB_EDGE_SOURCE = $installed
-          $env:PWB_EDGE_START_URL = $launch.StartURL
           $env:PWB_EDGE_EVIDENCE = Join-Path $env:GITHUB_WORKSPACE 'build\windows-edge-live'
-          node scripts/edge-launch-refresh-live-test.mjs
+          node scripts/windows-edge-live-test.mjs
           if ($LASTEXITCODE -ne 0) {
             $nodeExit = $LASTEXITCODE
             Get-WinEvent -FilterHashtable @{ LogName = 'Application'; Id = 1000; StartTime = (Get-Date).AddMinutes(-5) } -ErrorAction SilentlyContinue |

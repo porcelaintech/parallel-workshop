@@ -53,9 +53,30 @@ public enum Updater {
         }
     }
 
-    /// 仓库配置：环境变量 PWB_REPO 优先
+    /// 规范仓库名（2026-09-09 更名后的正式地址）
+    public static let canonicalRepo = "porcelaintech/parallel-workshop"
+
+    /// 仓库配置：环境变量 PWB_REPO 优先（历史版本与隔离测试会覆盖为旧名）
     public static var repo: String {
-        ProcessInfo.processInfo.environment["PWB_REPO"] ?? "porcelaintech/parallel-workshop"
+        ProcessInfo.processInfo.environment["PWB_REPO"] ?? canonicalRepo
+    }
+
+    /// 历史仓库名：仓库于 2026-09-09 自 HanchengQiao/parallel-workshop 转移更名。
+    /// 旧发布索引与旧客户端仍可能引用旧名称（GitHub 会 301），校验与回退时一并接受，
+    /// 避免「更名后老版本/旧索引全部报 missingAsset」的断链问题。
+    public static let legacyRepos = ["HanchengQiao/parallel-workshop"]
+
+    /// 所有可接受的仓库名（规范名 + 历史名 + 当前配置名，去重）
+    public static var allRepos: [String] {
+        var list = [canonicalRepo]
+        for name in legacyRepos where !list.contains(name) { list.append(name) }
+        if !list.contains(repo) { list.append(repo) }
+        return list
+    }
+
+    /// 发布页面（检查失败时的兜底入口：用户可直接前往下载）
+    public static var releasePageURL: URL {
+        URL(string: "https://github.com/\(repo)/releases/latest")!
     }
 
     /// 是否 Mac App Store 构建（打包脚本写入 Info.plist 的 PWBChannel=appstore）。
@@ -80,22 +101,91 @@ public enum Updater {
         try? await fetchLatestRelease()
     }
 
-    /// API 上限 15 秒、临时错误最多重试一次；限流或网络故障时，正式发布索引最多再等待 15 秒。
+    /// 更新源按顺序尝试（每个来源最多 8 秒）：
+    ///   1. 官方 API（releases/latest，含资产 SHA256）
+    ///   2. 正式发布索引（release 资产 update.json，免 API 限流）
+    ///   3. CDN 镜像索引（jsDelivr 代理仓库内 update.json，应对 GitHub 不可达的网络环境）
+    ///   4. 历史仓库名索引（兼容更名前发布的旧索引）
+    /// 任一来源返回有效发布即采用；全部失败时汇总错误，绝不把失败误报成「已是最新」。
     public static func fetchLatestRelease() async throws -> Release {
-        guard repo.range(of: #"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"#, options: .regularExpression) != nil,
-              let url = URL(string: "https://api.github.com/repos/\(repo)/releases/latest") else {
-            throw UpdateError.invalidRepository
-        }
-        var req = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData)
-        req.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
-        req.setValue("ParallelWorkbench/\(currentVersion)", forHTTPHeaderField: "User-Agent")
         let configuration = URLSessionConfiguration.ephemeral
-        configuration.timeoutIntervalForRequest = 15
-        configuration.timeoutIntervalForResource = 15
+        configuration.timeoutIntervalForRequest = 8
+        configuration.timeoutIntervalForResource = 8
         let session = URLSession(configuration: configuration)
         defer { session.invalidateAndCancel() }
-        let fallbackURL = URL(string: "https://github.com/\(repo)/releases/latest/download/update.json")!
-        return try await fetchLatestReleaseWithFallback(session: session, request: req, fallbackURL: fallbackURL)
+        return try await fetchLatestRelease(session: session)
+    }
+
+    /// 编排体（session 可注入以便隔离测试）
+    static func fetchLatestRelease(session: URLSession) async throws -> Release {
+        guard repo.range(of: #"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"#, options: .regularExpression) != nil else {
+            throw UpdateError.invalidRepository
+        }
+        var errors: [String] = []
+        var primaryError: Error?
+
+        if let url = URL(string: "https://api.github.com/repos/\(repo)/releases/latest") {
+            var req = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData)
+            req.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+            req.setValue("ParallelWorkbench/\(currentVersion)", forHTTPHeaderField: "User-Agent")
+            req.timeoutInterval = 8
+            do { return try await fetchLatestRelease(session: session, request: req) }
+            catch {
+                primaryError = error
+                errors.append(describe(error))
+            }
+        }
+
+        var indexURLs: [URL] = []
+        if let url = URL(string: "https://github.com/\(repo)/releases/latest/download/update.json") {
+            indexURLs.append(url)
+        }
+        if let url = URL(string: "https://cdn.jsdelivr.net/gh/\(repo)@main/update.json") {
+            indexURLs.append(url)
+        }
+        for legacy in legacyRepos where legacy != repo {
+            if let url = URL(string: "https://github.com/\(legacy)/releases/latest/download/update.json") {
+                indexURLs.append(url)
+            }
+        }
+        for url in indexURLs {
+            do { return try await fetchUpdateIndex(session: session, url: url) }
+            catch {
+                if primaryError == nil { primaryError = error }
+                errors.append(describe(error))
+            }
+        }
+
+        if let primaryError { throw primaryError }
+        throw UpdateError.network(errors.isEmpty ? "无可用更新源" : errors.joined(separator: "；"))
+    }
+
+    private static func describe(_ error: Error) -> String {
+        if let error = error as? UpdateError { return error.errorDescription ?? "更新服务错误" }
+        return (error as NSError).localizedDescription
+    }
+
+    /// 拉取并校验一个发布索引（update.json）；8 秒内无响应视为超时。
+    static func fetchUpdateIndex(session: URLSession, url: URL) async throws -> Release {
+        try await withThrowingTaskGroup(of: Release.self) { group in
+            group.addTask {
+                var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData)
+                request.timeoutInterval = 8
+                request.setValue("ParallelWorkbench/\(currentVersion)", forHTTPHeaderField: "User-Agent")
+                let (data, response) = try await session.data(for: request)
+                guard let response = response as? HTTPURLResponse, (200...299).contains(response.statusCode) else {
+                    throw UpdateError.httpStatus((response as? HTTPURLResponse)?.statusCode ?? 0)
+                }
+                return try parseUpdateIndex(data)
+            }
+            group.addTask {
+                try await Task.sleep(nanoseconds: 8_000_000_000)
+                throw UpdateError.timedOut
+            }
+            defer { group.cancelAll() }
+            guard let release = try await group.next() else { throw UpdateError.invalidRelease }
+            return release
+        }
     }
 
     static func fetchLatestReleaseWithFallback(session: URLSession, request: URLRequest, fallbackURL: URL) async throws -> Release {
@@ -224,8 +314,8 @@ public enum Updater {
     static func validAssetURL(_ value: String) -> URL? {
         guard let url = URL(string: value), url.scheme == "https", url.host == "github.com",
               url.user == nil, url.password == nil, url.port == nil, url.query == nil, url.fragment == nil,
-              url.path.hasPrefix("/\(repo)/releases/download/"),
               url.pathComponents.count == 7,
+              allRepos.contains(where: { url.path.hasPrefix("/\($0)/releases/download/") }),
               versionFromDMGAssetName(url.lastPathComponent) != nil else { return nil }
         return url
     }

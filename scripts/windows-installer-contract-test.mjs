@@ -42,39 +42,48 @@ requireText(bootstrap.includes('NoClipboard = [bool]$NoClipboard'), '固定入�
 
 const installer = read('Windows/edge-extension/install.ps1');
 requireText(installer.includes("GetFolderPath('LocalApplicationData')"), '默认安装位置必须是当前用户目录');
+requireText(installer.includes('[switch]$Enterprise') === false, '内层安装器不得暴露管理员策略模式（仅外层引导器可选）');
 requireText(!/Start-Process[^\n]+-Verb\s+RunAs/i.test(installer) && !/net\s+session/i.test(installer),
-  '安装器不得请求管理员权限');
+  '默认安装流程不得请求管理员权限');
 requireText(installer.includes("[Guid]::NewGuid().ToString('N')") &&
   installer.includes('.edge-extension.new-') && installer.includes('.edge-extension.old-'),
   '安装器必须使用并发安全的同卷暂存/备份目录');
-requireText(installer.includes('Test-IsSameOrChildPath $originalLocation $target') &&
+requireText(installer.includes('Test-IsSameOrChildPath $originalLocation $targetRootFull') &&
   installer.includes('Set-Location -LiteralPath $targetRootFull'),
   '安装器未处理从已安装目录内执行更新的 Windows 目录锁');
 requireText(installer.includes("$_.Name -ne '_metadata'"), '安装器必须剔除 Edge 的陈旧 _metadata 缓存');
 requireText(installer.includes('恢复旧版本') && installer.includes('已保留原版本'), '原子替换失败时缺少回滚');
-requireText(installer.includes('FromBase64String') && installer.includes('$derivedID -ne $expectedExtensionID'),
+requireText(installer.includes('FromBase64String') && installer.includes('Get-DerivedExtensionID') &&
+  installer.includes('$expectedExtensionID'),
   '安装器必须校验 manifest 公钥确实导出固定扩展 ID');
-requireText(installer.includes('$shortcut.TargetPath = $edgePath') &&
-  installer.includes('$shortcut.Arguments = $launchInfo.Arguments'),
-  '快捷方式应直接启动 Edge 应用窗口，避免 PowerShell 窗口和 blank 预热');
+requireText(installer.includes("'edge-extension-' + $version") && installer.includes("'current.txt'"),
+  '安装器必须使用版本化目录 + current.txt 指针（免文件锁更新模型）');
+requireText(installer.includes('$shortcut.TargetPath = $powershellPath') &&
+  installer.includes('$shortcut.Arguments = $launcherArgs'),
+  '快捷方式应指向启动器（每次启动自动检查更新）');
 requireText(installer.includes("Join-Path $dir '智囊.lnk'") && installer.includes('Test-ProductShortcut'),
   '安装器必须提供智囊入口，且仅迁移本产品旧快捷方式');
-requireText(installer.includes('if ($launchInfo.ExtensionReady)') && installer.includes('Start-Process -FilePath $edgePath -ArgumentList $launchInfo.Arguments'),
-  '已安装用户必须进入启动页确认运行版本，不能只打开扩展管理页');
-requireText(!installer.includes('--user-data-dir'), '安装/启动不得切换 Edge 用户数据目录');
+requireText(installer.includes('& $launcherPath'),
+  '安装完成后必须直接打开智囊工作台');
 requireText(installer.includes('if (-not $NoClipboard)') && installer.includes("Get-Command 'Set-Clipboard'"),
   '安装器必须允许隔离测试禁止写入全局剪贴板');
 
 const launcher = read('Windows/edge-extension/launch.ps1');
-requireText(launcher.includes('chrome-extension://eeppnjgcjioaohaaoaknkkafhodccmmf/launch.html'),
+requireText(launcher.includes("$extensionID = 'mklpdfdkbchlahfahofajchfjphlpkek'") &&
+  launcher.includes('chrome-extension://$extensionID/launch.html'),
   '启动器必须指向固定侧载扩展 ID');
-requireText(launcher.includes("'start.html'") && launcher.includes("[Uri]::new($startFile, [UriKind]::Absolute).AbsoluteUri") &&
-  launcher.includes('Start-Process -FilePath $edge -ArgumentList $arguments'),
-  '启动器必须打开可见的本地启动页，并正确编码中文、空格路径');
-requireText(launcher.includes('Get-ExtensionRegistration') && launcher.includes('Secure Preferences') && launcher.includes('PathMatches'),
-  '启动器必须识别实际安装的现有 Edge profile 和路径，避免启动另一份旧安装');
-requireText(!launcher.includes('about:blank') && !launcher.includes('--user-data-dir') && !launcher.includes('Start-Sleep'),
-  '启动器不得包含 blank 预热、独立 profile 或固定等待');
+requireText(launcher.includes('--load-extension') && launcher.includes('--disable-extensions-except'),
+  '启动器必须用命令行加载扩展（免开发者模式、免反复授权）');
+requireText(launcher.includes('--user-data-dir'), '启动器必须使用独立 Edge 配置档（保证命令行参数在已运行 Edge 时也生效）');
+requireText(launcher.includes("'current.txt'") && launcher.includes("'edge-extension-' + $current"),
+  '启动器必须解析版本化安装目录指针');
+requireText(launcher.includes('/releases/latest/download/update.json') && launcher.includes('Get-FileHash') &&
+  launcher.includes('edgeSHA256'),
+  '启动器必须在启动前自动检查更新并强校验 SHA-256');
+requireText(launcher.includes('Start-Process -FilePath $edge -ArgumentList $args'),
+  '启动器必须直接启动 Edge');
+requireText(!launcher.includes('Get-ExtensionRegistration') && !launcher.includes('Secure Preferences'),
+  '新启动模型不再依赖开发者模式注册项');
 
 for (const path of ['Windows/edge-extension/install.bat', 'Windows/edge-extension/launch.bat']) {
   const bat = read(path);

@@ -1,12 +1,20 @@
 # 智囊 · Braintrust — macOS 版
 
-v0.4.0 是当前稳定版。
+v0.4.1 是当前稳定版。
 
 > 本目录是 **macOS 产品入口**。Windows/Edge 用户请使用仓库根目录下 `Windows/` 目录。
 
 一键安装脚本自动获取最新稳定 Release。让 Agent 帮忙安装时，复制 [macOS 极简 Prompt](../AGENT_INSTALL_PROMPT.md#macos--复制以下整段) 即可。
 
-本版完善更新流程：顶部固定显示 `Update` 和当前版本，明确区分「已是最新版」、网络超时与服务错误，并支持重试。启动、回到前台及每 6 小时自动检查；GitHub API 受限或暂时不可用时使用 Release 的 `update.json` 备用索引。发现新版后点击 `Update` 即可下载、校验并安装，等待旧进程退出后重启新版。
+本版（v0.4.1）修复更新断链（仓库更名所致）并把更新链路做厚：
+
+- 顶部固定显示 `Update` 和当前版本，每次点击都有明确反馈（检查中 / 已是最新 / 发现新版 / 失败原因）
+- 更新检查按「官方 API → 发布索引 `update.json` → CDN 镜像 → 历史仓库名索引」多级回退，任一来源可用即成功
+- 失败时除「重试」外提供「前往下载页」直达 GitHub Releases
+- 发现新版后点击 `Update` 下载、强校验 SHA-256、原子替换并重启新版；任何一步失败都保留旧版
+- 兼容仓库更名前的旧仓库名（`HanchengQiao/parallel-workshop` 的 301 资产链接）
+
+> **v0.4.0 及更早版本无法自助更新**（更新检查指向更名前的仓库名/尚不存在的仓库路径）。请用上方一键安装命令重装一次 v0.4.1，之后更新按钮恢复可用。App Store 渠道构建的更新由 App Store 提供，应用内自动关闭自助更新。
 
 ## 从 GitHub 直接下载安装（命令行）
 
@@ -21,7 +29,7 @@ curl -fsSL https://raw.githubusercontent.com/porcelaintech/parallel-workshop/mai
 **方式二：手动下载 DMG**
 
 ```bash
-VERSION=0.4.0
+VERSION=0.4.1
 curl -LO "https://github.com/porcelaintech/parallel-workshop/releases/download/v${VERSION}/ParallelWorkbench-${VERSION}.dmg"
 open "ParallelWorkbench-${VERSION}.dmg"
 # 把 ParallelWorkbench.app 拖进 Applications 即可
