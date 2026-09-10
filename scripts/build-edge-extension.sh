@@ -139,5 +139,5 @@ PY
   trap - EXIT
   echo "✅ 自托管 CRX 与 updates.xml 已生成：build/edge-extension-${CRX_ID}.crx"
 else
-  echo "⚠️ 未找到扩展签名私钥（$CRX_KEY），跳过 CRX 打包（企业策略模式需要）"
+  echo "⚠️ 未找到扩展签名私钥（${CRX_KEY}），跳过 CRX 打包（企业策略模式需要）"
 fi

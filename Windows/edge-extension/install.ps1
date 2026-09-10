@@ -1,4 +1,4 @@
-﻿[CmdletBinding()]
+[CmdletBinding()]
 param(
     [string]$SourceDir = $PSScriptRoot,
     [string]$TargetRoot = (Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'ParallelWorkbench'),
@@ -193,7 +193,7 @@ function Test-ProductShortcut($Shortcut, [string]$ProductRoot) {
     # 新模型：快捷方式指向本产品的 launch.ps1（powershell.exe 目标）
     foreach ($relative in @('launch.bat', 'launch.ps1', 'edge-extension\launch.bat', 'edge-extension\launch.ps1')) {
         if ([string]$Shortcut.TargetPath -eq (Join-Path $ProductRoot $relative)) { return $true }
-        if ([string]$Shortcut.Arguments).Contains('"' + (Join-Path $ProductRoot $relative) + '"') { return $true }
+        if (([string]$Shortcut.Arguments).Contains('"' + (Join-Path $ProductRoot $relative) + '"')) { return $true }
     }
     # 旧版快捷方式形态（v0.4.0 及更早）
     if ([string]$Shortcut.Arguments -match 'chrome-extension://mklpdfdkbchlahfahofajchfjphlpkek/(workbench|launch)\.html(?:["\s]|$)') { return $true }
