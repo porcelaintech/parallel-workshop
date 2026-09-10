@@ -36,6 +36,8 @@ function Invoke-WebRequest([string]$Uri, $Headers, [string]$OutFile, [int]$Timeo
 }
 
 $extensionID = 'mklpdfdkbchlahfahofajchfjphlpkek'
+$expectedExtensionID = 'mklpdfdkbchlahfahofajchfjphlpkek'
+$updateRepos = @('porcelaintech/parallel-workshop', 'HanchengQiao/parallel-workshop')
 $productRoot = $testRoot
 try {
     New-Item -ItemType Directory -Path $testRoot -Force | Out-Null
