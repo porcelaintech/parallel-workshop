@@ -57,13 +57,15 @@ public sealed class PaneController
             // WinUI 3 投影只提供无参 CreateAsync：默认用户数据目录即可
             // （打包形态下 WebView2 自动落到可写的包数据目录），真实路径由环境报告，
             // 记录到 profile-path.txt 供登录态备份/恢复使用。
-            var options = new CoreWebView2EnvironmentOptions();
+            // 测试钩子（仅内部真机测试）：标记文件存在时在本进程内设置调试参数，
+            // WebView2 运行时读取的是本进程环境变量，不受打包应用激活链影响。
             var cdpPort = CdpTestPort();
             if (cdpPort != null)
             {
-                options.AdditionalBrowserArguments = $"--remote-debugging-port={cdpPort}";
+                Environment.SetEnvironmentVariable(
+                    "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", $"--remote-debugging-port={cdpPort}");
             }
-            _env = await CoreWebView2Environment.CreateAsync(options);
+            _env = await CoreWebView2Environment.CreateAsync();
             try
             {
                 var udf = _env.UserDataFolder;
