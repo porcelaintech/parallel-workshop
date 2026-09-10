@@ -56,6 +56,11 @@ function Invoke-BoundedPowerShell([string]$ScriptPath, [string[]]$Arguments, [st
     $startInfo.CreateNoWindow = $true
     $startInfo.RedirectStandardOutput = $true
     $startInfo.RedirectStandardError = $true
+    # 子进程（launch.ps1 -PrintOnly）固定输出 UTF-8；这里同样按 UTF-8 解码，避免中文路径被 OEM 代码页吞成 ?
+    try {
+        $startInfo.StandardOutputEncoding = [Text.Encoding]::UTF8
+        $startInfo.StandardErrorEncoding = [Text.Encoding]::UTF8
+    } catch {}
 
     $process = New-Object Diagnostics.Process
     $process.StartInfo = $startInfo

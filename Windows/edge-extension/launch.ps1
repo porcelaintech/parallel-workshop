@@ -150,6 +150,8 @@ function Get-LaunchArguments([string]$ExtensionDir) {
 $edge = Get-EdgePath
 $currentDir = Get-CurrentExtensionDir
 if ($PrintOnly) {
+    # 跨进程输出固定 UTF-8（PS 5.1 重定向 stdout 默认用 OEM 代码页，中文路径会被吞成 ?）
+    try { [Console]::OutputEncoding = [Text.Encoding]::UTF8 } catch {}
     $extensionDirForArgs = $currentDir
     if (-not $extensionDirForArgs) {
         # 尚未安装时仅输出占位（安装流程中不会用到）
