@@ -23,10 +23,13 @@ function Write-Step([string]$Message) { Write-Host ('[live] {0}' -f $Message) }
 $pfx = Join-Path (Split-Path -Parent $MsixPath) 'pwb-ci-dev.pfx'
 if (-not (Test-Path -LiteralPath $pfx)) { throw "缺少测试签名证书: $pfx" }
 $pfxPassword = ConvertTo-SecureString -String 'pwb-ci-dev' -Force -AsPlainText
-Import-PfxCertificate -FilePath $pfx -CertStoreLocation 'Cert:\CurrentUser\My' -Password $pfxPassword | Out-Null
-Import-PfxCertificate -FilePath $pfx -CertStoreLocation 'Cert:\CurrentUser\TrustedPeople' -Password $pfxPassword | Out-Null
+# 导入到本机信任库（runner 为管理员）：
+# CurrentUser 信任库在交互会话会弹「证书信任」确认框导致 CI 挂起；LocalMachine 无对话框。
+Write-Step '导入测试证书到本机信任库'
+Import-PfxCertificate -FilePath $pfx -CertStoreLocation 'Cert:\LocalMachine\My' -Password $pfxPassword | Out-Null
+Import-PfxCertificate -FilePath $pfx -CertStoreLocation 'Cert:\LocalMachine\TrustedPeople' -Password $pfxPassword | Out-Null
 # 自签证书本身即根：必须同时进入「受信任的根证书颁发机构」，否则 MSIX 签名链校验报 0x800B0109
-Import-PfxCertificate -FilePath $pfx -CertStoreLocation 'Cert:\CurrentUser\Root' -Password $pfxPassword | Out-Null
+Import-PfxCertificate -FilePath $pfx -CertStoreLocation 'Cert:\LocalMachine\Root' -Password $pfxPassword | Out-Null
 Write-Step '测试证书已导入并信任'
 
 # —— 2. 安装 MSIX ——
