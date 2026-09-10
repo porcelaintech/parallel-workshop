@@ -95,6 +95,15 @@ public sealed class PaneController
                 StatusChanged?.Invoke(this);
             }
         };
+        // DeepSeek 模型偏好记忆（与 macOS 版一致：文档起点注入，新会话重置后恢复上次模型）
+        if (Adapter.Id == "deepseek")
+        {
+            var modelPref = LoadScript("model-preference");
+            if (!string.IsNullOrEmpty(modelPref))
+            {
+                await cv.AddScriptToExecuteOnDocumentCreatedAsync(modelPref);
+            }
+        }
         cv.Navigate(Adapter.Origin);
     }
 
