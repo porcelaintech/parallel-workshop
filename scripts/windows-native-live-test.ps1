@@ -41,12 +41,16 @@ if (-not $pkg) { throw '安装后未找到应用包' }
 Write-Step "已安装: $($pkg.PackageFamilyName) v$($pkg.Version)"
 
 # —— 3. 启动（携带 WebView2 调试端口，供六窗格取证）——
-# 应用内的测试钩子读取 %TEMP%\pwb-test-cdp-port.txt 启用调试端口（不依赖环境变量传递，
-# 打包应用的激活链不受 explorer/ShellExecute 环境继承影响）。
+# 打包（MSIX）形态的 WebView2 会忽略 WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS 环境变量；
+# 用微软官方支持的 WebView2 策略注册表注入调试参数（管理员可写、运行时必读）。
+$wv2Policy = 'HKLM:\SOFTWARE\Policies\Microsoft\Edge\WebView2'
+New-Item -Path $wv2Policy -Force | Out-Null
+New-ItemProperty -Path $wv2Policy -Name 'AdditionalBrowserArguments' `
+    -Value "--remote-debugging-port=$Port" -PropertyType String -Force | Out-Null
+# 应用内测试钩子（开发调试备用）：标记文件使应用开放 DevTools
 Set-Content -LiteralPath (Join-Path ([IO.Path]::GetTempPath()) 'pwb-test-cdp-port.txt') -Value "$Port" -Encoding ASCII
-$env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = "--remote-debugging-port=$Port"
 Start-Process -FilePath "shell:AppsFolder\$($pkg.PackageFamilyName)!App" | Out-Null
-Write-Step '已发起启动（应用内调试端口钩子已就绪）'
+Write-Step '已发起启动（WebView2 策略已注入调试端口）'
 
 # —— 4. 轮询进程与调试端口 ——
 $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
@@ -126,5 +130,9 @@ try {
 } catch {
     Write-Warning "截图失败（不阻断测试）: $($_.Exception.Message)"
 }
+
+# 清理测试钩子（运行器为一次性环境，保持整洁）
+Remove-ItemProperty -Path $wv2Policy -Name 'AdditionalBrowserArguments' -ErrorAction SilentlyContinue
+Remove-Item -LiteralPath (Join-Path ([IO.Path]::GetTempPath()) 'pwb-test-cdp-port.txt') -Force -ErrorAction SilentlyContinue
 
 Write-Host 'PASS: Windows 原生 MSIX 真机 live 测试（安装/启动/六窗格/稳定性）'
