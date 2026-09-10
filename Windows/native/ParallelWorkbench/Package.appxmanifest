@@ -15,7 +15,7 @@
   <Identity
     Name="PorcelainTech.Braintrust"
     Publisher="CN=ParallelWorkbenchDev"
-    Version="0.4.0.0" />
+    Version="0.4.1.0" />
 
   <Properties>
     <DisplayName>智囊 · Braintrust</DisplayName>

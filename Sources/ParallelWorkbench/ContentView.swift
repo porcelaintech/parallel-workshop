@@ -128,6 +128,10 @@ struct ContentView: View {
                     if updates.phase == .failed {
                         Button("重试") { updates.primaryAction() }
                             .buttonStyle(WorkbenchTextButtonStyle())
+                        Button("前往下载页") {
+                            NSWorkspace.shared.open(Updater.releasePageURL)
+                        }
+                        .buttonStyle(WorkbenchTextButtonStyle())
                     }
                 }
             }

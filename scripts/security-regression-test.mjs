@@ -40,10 +40,13 @@ requireText(background.includes('WB_AUTH_CALLBACK_CANDIDATE'), '后台缺少认�
 requireText(!background.includes("url: 'about:blank'") && background.includes('isReusableEmptyTab') &&
   background.includes('chrome.tabs.update(tab.id, { url: LAUNCH_URL'),
   '工具栏启动未把已有空白/新标签页原地替换为工作台');
-requireText(manifest.permissions?.includes('activeTab'), '工具栏入口缺少安全读取当前活动标签 URL 的 activeTab 权限');
+requireText(!manifest.permissions?.includes('debugger') && !manifest.permissions?.includes('activeTab') &&
+  manifest.permissions?.includes('declarativeNetRequest') && manifest.permissions?.includes('storage'),
+  '扩展必须最小化权限：去掉 debugger/activeTab，保留 DNR 与 storage');
 requireText(!launcher.includes('--no-startup-window') && !windowsLaunchPS.includes('--no-startup-window') &&
-  !/timeout\s+\/t/i.test(launcher) && windowsLaunchPS.includes('--app='),
-  'Windows 启动器仍包含 blank 预热或固定延迟');
+  !/timeout\s+\/t/i.test(launcher) && windowsLaunchPS.includes('--load-extension') &&
+  windowsLaunchPS.includes('--no-first-run'),
+  'Windows 启动器仍包含 blank 预热、固定延迟，或未用命令行加载扩展');
 requireText(!edgeE2E.includes('about:blank') && edgeE2E.includes('ensureSingleWorkbenchPage') &&
   !edgeE2E.includes('/json/new?'), 'Edge E2E 仍会从 about:blank 或直接反复新建工作台标签');
 requireText(edgeAttachMatrix.includes('ensureSingleWorkbenchPage') && !edgeAttachMatrix.includes('/json/new?'),
@@ -75,7 +78,7 @@ requireText(windowsBootstrap.includes("name -eq 'edge-extension.zip'") &&
 requireText(windowsInstallPS.includes('.edge-extension.new-') && windowsInstallPS.includes('.edge-extension.old-') &&
   windowsInstallPS.includes('NoLaunch') && windowsInstallPS.includes('NoShortcuts'),
   'Windows 本地安装器缺少原子替换或无人值守参数');
-requireText(!windowsLaunchPS.includes('--user-data-dir'), 'Windows 启动器不得切换 Edge profile');
+requireText(windowsLaunchPS.includes('--user-data-dir'), 'Windows 启动器必须使用独立 Edge 配置档（保证已运行 Edge 时命令行参数生效）');
 requireText(updaterCaller.includes('expectedSHA256: rel.dmgSHA256'), 'macOS 更新调用未传递 SHA-256');
 requireText(installer.includes('SHA-256 校验通过') && installer.includes('shasum -a 256'),
   'install.sh 未强制校验 SHA-256');

@@ -12,8 +12,8 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 
 echo "==> 编译 release 版（Apple 芯片 + Intel 通用）"
-swift build --scratch-path "$PACKAGE_SCRATCH" -c release --arch arm64
-swift build --scratch-path "$PACKAGE_SCRATCH" -c release --arch x86_64
+swift build --disable-sandbox --scratch-path "$PACKAGE_SCRATCH" -c release --arch arm64
+swift build --disable-sandbox --scratch-path "$PACKAGE_SCRATCH" -c release --arch x86_64
 
 ARM="$PACKAGE_SCRATCH/arm64-apple-macosx/release/ParallelWorkbench"
 X64="$PACKAGE_SCRATCH/x86_64-apple-macosx/release/ParallelWorkbench"

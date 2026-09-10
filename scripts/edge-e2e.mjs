@@ -12,7 +12,7 @@
 import { readFileSync } from 'node:fs';
 import { assertCleanWorkbenchTargets, cdpCommand, ensureSingleWorkbenchPage } from './edge-workbench-target.mjs';
 
-const EXT_ID = process.argv[2] || 'eeppnjgcjioaohaaoaknkkafhodccmmf';
+const EXT_ID = process.argv[2] || 'mklpdfdkbchlahfahofajchfjphlpkek';
 const SEND = process.argv.includes('--send');
 const PORT = Number(process.env.PWB_EDGE_PORT || 9223);
 const BASE = process.env.PWB_BASE || decodeURIComponent(new URL('..', import.meta.url).pathname);

@@ -181,6 +181,50 @@ final class UpdaterTests: XCTestCase {
         XCTAssertNotNil(release.dmgSHA256)
         print("PUBLIC_LATEST_VERSION=\(release.version)")
     }
+
+    // —— 2026-09-09 仓库更名后新增：旧仓库名资产 URL 必须继续通过校验 ——
+
+    func testLegacyRepoAssetURLsAreAcceptedButOtherOwnersRejected() {
+        let current = "https://github.com/porcelaintech/parallel-workshop/releases/download/v1.2.3/ParallelWorkbench-1.2.3.dmg"
+        let legacy = "https://github.com/HanchengQiao/parallel-workshop/releases/download/v1.2.3/ParallelWorkbench-1.2.3.dmg"
+        XCTAssertNotNil(Updater.validAssetURL(current))
+        XCTAssertNotNil(Updater.validAssetURL(legacy))
+        XCTAssertNil(Updater.validAssetURL(legacy.replacingOccurrences(of: "HanchengQiao", with: "attacker")))
+        XCTAssertNil(Updater.validAssetURL("https://github.com/porcelaintech/evil-repo/releases/download/v1.2.3/ParallelWorkbench-1.2.3.dmg"))
+    }
+
+    func testOrchestratorFallsThroughAPI404ToPublishedIndex() async throws {
+        let index = try updateIndexData()
+        UpdateURLProtocol.configure([(404, Data()), (200, index)])
+        let session = session()
+        defer { session.invalidateAndCancel() }
+        let release = try await Updater.fetchLatestRelease(session: session)
+        XCTAssertEqual(release.version, "1.2.3")
+        XCTAssertEqual(UpdateURLProtocol.requestCount, 2)
+    }
+
+    func testOrchestratorFallsThroughToMirrorAndLegacyIndexes() async throws {
+        let index = try updateIndexData()
+        // API 404 → 官方索引 404 → jsDelivr 镜像 404 → 历史仓库名索引 200
+        UpdateURLProtocol.configure([(404, Data()), (404, Data()), (404, Data()), (200, index)])
+        let session = session()
+        defer { session.invalidateAndCancel() }
+        let release = try await Updater.fetchLatestRelease(session: session)
+        XCTAssertEqual(release.version, "1.2.3")
+        XCTAssertEqual(UpdateURLProtocol.requestCount, 4)
+    }
+
+    func testOrchestratorPreservesPrimaryErrorWhenEverySourceFails() async throws {
+        // 全部 4 个来源 404：必须报错（保留首个错误），绝不允许静默。
+        UpdateURLProtocol.configure([(404, Data()), (404, Data()), (404, Data()), (404, Data())])
+        let session = session()
+        defer { session.invalidateAndCancel() }
+        do {
+            _ = try await Updater.fetchLatestRelease(session: session)
+            XCTFail("All sources failing must surface an error")
+        } catch { XCTAssertEqual(error as? Updater.UpdateError, .httpStatus(404)) }
+        XCTAssertEqual(UpdateURLProtocol.requestCount, 4)
+    }
 }
 
 private final class UpdateURLProtocol: URLProtocol {

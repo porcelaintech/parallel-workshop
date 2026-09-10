@@ -1,19 +1,26 @@
 # 智囊 · Braintrust — Windows 安装与使用
 
-v0.4.0 是当前稳定版。
+v0.4.1 是当前稳定版。
 
 下面的固定命令自动获取 GitHub 最新稳定版。让 Agent 帮忙安装时，复制[Windows 极简 Prompt](https://github.com/porcelaintech/parallel-workshop/blob/main/AGENT_INSTALL_PROMPT.md#windows--复制以下整段)，直接使用本机 PowerShell 即可。
 
-本版完善更新流程：顶部固定显示 `Update` 和当前版本，明确区分「已是最新版」、网络超时与服务错误，并支持重试。启动、回到前台及每 6 小时自动检查；GitHub API 受限或暂时不可用时使用 Release 的 `update.json` 备用索引。
+本版（v0.4.1）彻底重构 Windows 分发与更新：
 
-GitHub 侧载版点击 `Update` 后下载并校验新版 ZIP，解压后运行新版 `install.bat`。从桌面「智囊」打开时，启动页核对实际运行版本；若仍为旧版，会重新加载本扩展以启用已安装新版。安装保留登录与偏好。商店渠道由浏览器管理安装和重载。
+- **免开发者模式**：扩展不再需要「开发人员模式 + 加载解压缩扩展」。安装后通过桌面/开始菜单「智囊」图标启动，启动器用独立 Edge 配置档 + `--load-extension` 命令行加载扩展（Edge 全平台保留该能力），因此没有启动骚扰条、没有反复授权。
+- **每次启动自动更新**：启动器先读取官方发布索引 `update.json`（SHA-256 强校验 + 扩展 ID 校验），发现新版先下载安装再打开工作台，全程无感；版本化安装目录保证运行中的旧版文件不被覆盖。
+- **更新按钮**：工作台顶部仍固定显示版本与 `Update` 状态（已是最新 / 发现新版）。发现新版时重启智囊（桌面图标）即自动完成更新；也可点击下载更新包作为手动兜底。
+- **一次性引导**：首次启动展示引导页（工具栏固定教程、登录说明、旧版清理提示），只出现一次。
+- **企业模式**：已加入 AD 域的 Windows 可用 `-Enterprise` 安装，一次性 UAC 授权写入 Edge 策略后，Edge 自动安装并持续自动更新官方签名 CRX（`updates.xml`）。
+- **权限最小化**：移除了 `debugger` 与 `activeTab`，只保留 declarativeNetRequest、storage、scripting、webNavigation。
+
+> 旧版（≤ v0.4.0，开发者模式安装）用户：请用上面的安装命令重装一次。重装后若 `edge://extensions` 里还有旧「智囊」条目（显示损坏），点移除即可（仅一次）。
 
 ## 产品形态对照
 
 | 平台 | 形态 | 登录态 |
 |---|---|---|
 | macOS | 原生应用（SwiftUI + WKWebView） | 应用内独立 WebKit 持久存储 |
-| **Windows** | **Edge 扩展（MV3，本目录）** | **继承 Edge 浏览器** |
+| **Windows** | **Edge 扩展（MV3，本目录）** | **智囊自己的 Edge 配置档（`%LOCALAPPDATA%\ParallelWorkbench\EdgeProfile`）** |
 
 两者共用同一套适配器/注入核心（`Sources/WorkbenchCore/Resources/` → `scripts/build-edge-extension.sh` 同步）。
 
@@ -29,15 +36,23 @@ $pwbInstaller = Join-Path $env:TEMP ('ParallelWorkbench-install-' + [Guid]::NewG
 
 安装器会自动完成版本查询、重试下载、SHA-256 校验、解压、原子复制与快捷方式创建，不需要管理员权限，也不会等待“按任意键”而卡住 Agent。
 
-## 在 Windows 上安装（开发者模式侧载）
+## 安装后如何使用
 
-1. 把整个 `edge-extension/` 目录复制到 Windows 机器（或解压 `build/edge-extension.zip`）
-2. 打开 Edge，地址栏输入 `edge://extensions`
-3. 打开左下角「开发人员模式」开关
-4. 点「加载解压缩的扩展」→ 选择 `edge-extension` 目录
-5. 正常安装后双击桌面「智囊」，或在开始菜单搜索「智囊」，直接进入工作台；无需每次在拼图菜单里找扩展
+1. 双击桌面或开始菜单的「智囊」图标即可打开工作台（首次展示一次性引导页）
+2. 首次使用请在智囊窗口内的各 pane 登录对应平台（登录态保存在智囊自己的配置档里，之后一直记住；更新不会影响登录）
+3. 也可以把 Edge 工具栏里的智囊图标固定：点右上角拼图 → 找到智囊 → 点图钉
 
-> 日常使用前：先在 Edge 里正常登录各平台（chat.deepseek.com / doubao.com / kimi.com 等），扩展里的 pane 直接继承这些登录态。
+> 注意：请始终通过「智囊」图标启动。直接打开 Edge 不会加载智囊扩展（这是免开发者模式设计的代价，换来零骚扰条与零反复授权）。
+
+### 开发者自测（加载仓库内未打包扩展）
+
+```bash
+bash scripts/build-edge-extension.sh
+# 测试用 Edge 实例：
+"/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge"   --user-data-dir=/tmp/wb-edge-live   --disable-extensions-except="$(pwd)/Windows/edge-extension"   --load-extension="$(pwd)/Windows/edge-extension"   --remote-debugging-port=9223 --no-first-run --no-startup-window &
+node scripts/edge-e2e.mjs
+node scripts/edge-attach-matrix.mjs
+```
 
 ## 自动测试（已在 Mac 上的 Edge 真机通过）
 
@@ -51,13 +66,16 @@ $pwbInstaller = Join-Path $env:TEMP ('ParallelWorkbench-install-' + [Guid]::NewG
 
 **快捷方式**：install.bat 创建「桌面 + 开始菜单」的「智囊」快捷方式，先打开本地 `start.html` 显示加载状态，扩展就绪后在同一窗口核对版本并进入工作台。已有「平行工作台」快捷方式也会更新到同一入口。
 
-## 首次实测清单（在 Windows Edge 上逐项确认）
+## 实测清单（GitHub Actions windows-latest 真机 Edge 逐项确认）
 
-- [ ] 扩展加载无报错（edge://extensions 无红色错误）
-- [ ] 各平台 pane 能嵌入显示（CSP 剥离规则生效）
-- [ ] 登录态继承（Edge 里已登录的平台 pane 内免登录）
-- [ ] 统一输入 → 各 pane 注入发送 → 回答生成
-- [ ] 状态角标与发送反馈正常
+- [x] 扩展用 `--load-extension` 加载无报错（免开发者模式，决定性 live test：`scripts/windows-edge-live-test.mjs`）
+- [x] 首次启动展示一次性引导页，点击后进入工作台（6 窗格、正确版本、零 blank/错误页）
+- [x] 冷重启直达工作台，引导不再出现，扩展本地存储与登录配置持久
+- [x] 各平台 pane 能嵌入显示（CSP 剥离规则生效）
+- [x] 状态角标（就绪/未登录/未找到输入框/无响应）与统一输入注入发送链路
+- [x] 附件双通道（文件输入框赋值 + 帧内主世界拖放）派发成功
+- [x] 安装器幂等重装、版本化目录回滚、旧版目录迁移、启动器自动更新（`scripts/windows-installer-behavior-test.ps1`）
+- [x] 企业模式在未加域机器上按官方约束明确拒绝（不写入任何文件）
 
 ## 附件（多模态）通道设计
 
@@ -66,10 +84,10 @@ $pwbInstaller = Join-Path $env:TEMP ('ParallelWorkbench-install-' + [Guid]::NewG
 | 通道 | 适用平台 | 原理 | 状态 |
 |---|---|---|---|
 | 文件输入框赋值 | 适配器配置了选择器（Kimi `input.hidden-input`、ChatGPT `input.wm-composer-srOnly`）；无选择器时自动兜底页内任一 file input（含隐藏） | 隔离世界重建 File → `input.files = dt.files` → change 事件 → 平台原生上传管线 | ✅ 已实测：ChatGPT 附件 chip 出现；Kimi 赋值成功 |
-| CDP 拖放（WB_ATTACH） | 无文件输入框的平台（DeepSeek/通义/文心） | 页面侧计算坐标（iframe 框 × CSS zoom + 帧内编辑器中心）→ chrome.debugger `Input.dispatchDragEvent` 在页面坐标派发（命中测试跨 OOPIF 投进对应帧） | ⚠️ 尽力而为 |
+| 帧内主世界拖放 | 无文件输入框的平台（通义/文心） | `chrome.scripting.executeScript(world:'MAIN')` 把自包含拖放函数注入目标帧：主世界构造真实 `File` + `DataTransfer`，在帧内编辑器中心派发 dragenter/dragover/drop | ✅ 已实测：帧内 drop 事件 3 连发成功 |
 
-- **CDP 拖放的平台限制**：`DragData.files` 要求磁盘文件路径，扩展无文件系统权限 → 只能投递 MIME 数据（`types=['image/png']` 而非 `'Files'`）；严格检查 File 类型的平台（如文心）会拒绝 → 工作台诚实提示「附件未被平台接受，请手动添加」
-- **Edge 152 注意**：`Page.getFrameTree` 对 chrome-extension 页面里的跨域 iframe（OOPIF）不返回子帧 → CDP 帧树发现不可用，必须用 `webNavigation.getAllFrames` + 坐标命中
+- **为什么不是 CDP**：旧版用 `chrome.debugger` 的 `Input.dispatchDragEvent`，每次投递都会弹「已开始调试此浏览器」横幅，且 `debugger` 权限在商店审核是重灾区 → v0.4.1 移除该权限，改为主世界合成拖放（站点拿到的 `dataTransfer.files` 与用户真实拖放等价，同为不可信事件）。
+- **主世界无扩展 API**：MAIN world 内容脚本里没有 `chrome.runtime`，必须由工作台 `chrome.scripting` 注入函数执行（自包含、参数可序列化）。
 - 接受度验证：内容脚本 `WB_ATTACH_CHECK`（隔离世界可读宿主 DOM，检查文件名是否出现在页面）
 - 逐平台矩阵测试：`scripts/edge-attach-matrix.mjs`（通道级验证，不发送真实消息；`--full` 才做全平台真实发送）
 

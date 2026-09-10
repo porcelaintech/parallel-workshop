@@ -107,3 +107,37 @@ rm -f build/edge-extension-store.zip
 rm -rf "$STORE_STAGE"
 trap - EXIT
 echo "✅ Edge 商店包已生成：build/edge-extension-store.zip"
+
+# 自托管 CRX（企业策略安装 + 自动更新用）：运行时文件 + sideload 渠道 + 无 manifest key（ID 来自签名）。
+# 私钥在 keys/edge-extension.pem（gitignore，绝不入库）；CI 无密钥时跳过。
+CRX_KEY="${PWB_CRX_KEY:-keys/edge-extension.pem}"
+if [ -f "$CRX_KEY" ]; then
+  VERSION="$(python3 -c 'import json; print(json.load(open("Windows/edge-extension/manifest.json"))["version"])')"
+  CRX_STAGE="$(mktemp -d /tmp/pwb-edge-crx.XXXXXX)"
+  trap 'rm -rf "$CRX_STAGE"' EXIT
+  cp Windows/edge-extension/{background.js,auth-bridge.js,intercept.js,content.js,workbench.html,workbench.js,workbench.css,launch.html,launch.js,launch.css} "$CRX_STAGE/"
+  printf '%s\n' '{"channel":"sideload"}' > "$CRX_STAGE/distribution.json"
+  mkdir -p "$CRX_STAGE/icons" "$CRX_STAGE/lib/adapters"
+  cp Windows/edge-extension/icons/{16.png,32.png,48.png,128.png} "$CRX_STAGE/icons/"
+  cp Windows/edge-extension/lib/adapters/index.json "$CRX_STAGE/lib/adapters/"
+  cp Windows/edge-extension/lib/model-preference.js "$CRX_STAGE/lib/"
+  python3 - "$CRX_STAGE/manifest.json" <<'PY'
+import json, sys
+source = json.load(open('Windows/edge-extension/manifest.json'))
+source.pop('key', None)
+with open(sys.argv[1], 'w') as handle:
+    json.dump(source, handle, ensure_ascii=False, indent=2)
+    handle.write('\n')
+PY
+  CRX_OUT="build/edge-extension-crx.crx"
+  PACK_OUTPUT="$(node scripts/pack-crx.mjs "$CRX_STAGE" "$CRX_KEY" "$CRX_OUT")"
+  echo "$PACK_OUTPUT"
+  CRX_ID="$(echo "$PACK_OUTPUT" | awk '/extension id/{print $4}')"
+  mv "$CRX_OUT" "build/edge-extension-${CRX_ID}.crx"
+  node scripts/generate-updates-xml.mjs "$VERSION" "build/edge-extension-${CRX_ID}.crx" porcelaintech/parallel-workshop build/updates.xml
+  rm -rf "$CRX_STAGE"
+  trap - EXIT
+  echo "✅ 自托管 CRX 与 updates.xml 已生成：build/edge-extension-${CRX_ID}.crx"
+else
+  echo "⚠️ 未找到扩展签名私钥（$CRX_KEY），跳过 CRX 打包（企业策略模式需要）"
+fi

@@ -5,11 +5,15 @@ import assert from 'node:assert/strict';
 const base = decodeURIComponent(new URL('..', import.meta.url).pathname);
 const source = readFileSync(base + 'Windows/edge-extension/background.js', 'utf8');
 
-async function runCase(tab, { existing = [], pending, installed = false, readySender, readySenders } = {}) {
+async function runCase(tab, { existing = [], pending, installed = false, readySender, readySenders, fastTime = false } = {}) {
   const calls = [];
   let actionListener = null;
   let installedListener;
   let messageListener;
+  // onInstalled 自动打开前有 30 秒宽限期（等启动页注册，避免重复弹窗）。
+  // 测试用快进时钟让宽限期立即到期，验证「无入口时最终仍会自动打开」。
+  const FakeDate = class extends Date { static now() { FakeDate._now += 40000; return FakeDate._now; } };
+  FakeDate._now = 1000000;
   const chrome = {
     runtime: {
       id: 'test-extension',
@@ -43,7 +47,7 @@ async function runCase(tab, { existing = [], pending, installed = false, readySe
     webNavigation: { getAllFrames: async ({ tabId }) => [{ frameId: 0, url: existing.find(tab => tab.id === tabId)?.url }] },
     debugger: { attach() {}, detach() {}, sendCommand() {} }
   };
-  runInNewContext(source, { chrome, URL, Set, Number, Promise, setTimeout, clearTimeout, console });
+  runInNewContext(source, { chrome, URL, Set, Number, Promise, setTimeout, clearTimeout, console, ...(fastTime ? { Date: FakeDate } : {}) });
   if (typeof actionListener !== 'function') throw new Error('action listener 未注册');
   if (installed) installedListener({ reason: 'install' });
   else if (readySenders) {
@@ -73,7 +77,10 @@ const existing = [{ id: 20, windowId: 8, url: 'chrome-extension://test-extension
 const focused = await runCase({ id: 10, url: 'https://example.com/' }, { existing });
 assert.equal(focused.filter(call => call[0] === 'windows.create').length, 0);
 assert.equal(focused.find(call => call[0] === 'tabs.update')[1], 20);
-assert.equal((await runCase(null, { installed: true })).filter(call => call[0] === 'windows.create').length, 1);
+assert.equal((await runCase(null, { installed: true, fastTime: true })).filter(call => call[0] === 'windows.create').length, 1,
+  '安装事件在宽限期内没有任何入口时，最终必须自动打开工作台');
+const installedWithEntry = await runCase(null, { installed: true, fastTime: true, existing: [{ id: 30, windowId: 8, url: 'chrome-extension://test-extension/launch.html' }] });
+assert.equal(installedWithEntry.filter(call => call[0] === 'windows.create').length, 0, '已存在启动页时安装事件不得重复弹窗');
 const recovered = await runCase(null, { existing, pending: { tabId: 20, version: '0.4.0', createdAt: Date.now() } });
 assert.equal(recovered.filter(call => call[0] === 'windows.create').length, 0);
 assert.equal(recovered.find(call => call[0] === 'tabs.update')[2].url, 'chrome-extension://test-extension/launch.html');

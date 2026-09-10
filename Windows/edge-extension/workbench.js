@@ -15,7 +15,7 @@
     .catch(() => 'sideload');
   const MAX_VISIBLE = 3;
 
-  // 平台主域名映射（WB_ATTACH CDP 拖放按 host 定位 frame）
+  // 平台主域名映射（WB_ATTACH 帧内拖放按 host 定位 frame）
   const FRAME_HOSTS = {};
   for (const a of adapters) {
     try { FRAME_HOSTS[a.id] = new URL(a.origin).hostname; } catch {}
@@ -626,35 +626,42 @@
     return null;
   }
 
-  // CDP 拖放坐标：iframe 框（含 CSS zoom）换算帧内编辑器中心为页面坐标；
-  // 离屏窗格临时移入视口左上角（命中测试需要视口内坐标），拖放后恢复。
-  async function attachCoordsFor(id) {
-    const ifr = document.getElementById('frame-' + id);
-    if (!ifr) return { ok: false, error: 'no-iframe' };
-    const frameId = await frameIdOfAdapter(id);
-    if (!frameId) return { ok: false, error: 'no-frame' };
-    const center = await editorCenterInFrame(frameId);
-    if (!center) return { ok: false, error: 'no-editor' };
-    const pane = ifr.closest('.pane');
-    const wasOff = pane && pane.classList.contains('offscreen');
-    if (wasOff) {
-      pane.style.position = 'fixed';
-      pane.style.left = '0px';
-      pane.style.top = '0px';
-      pane.style.zIndex = '9999';
-      pane.style.opacity = '0.01';
+  // 帧内主世界附件投递（替代已移除的 chrome.debugger CDP 通道）：
+  // 由 chrome.scripting.executeScript 以 world:'MAIN' 注入目标平台帧执行，
+  // 在页面主世界构造真实 File + DataTransfer 并合成 dragenter/dragover/drop。
+  // 站点拿到的 dataTransfer.files 与用户真实拖放等价（同样为不可信事件）。
+  async function dropFilesInFrame(payload) {
+    try {
+      const { x, y, items } = payload || {};
+      if (!Array.isArray(items) || !items.length || typeof x !== 'number' || typeof y !== 'number') {
+        return { ok: false, error: 'bad-args' };
+      }
+      const dt = new DataTransfer();
+      for (const it of items) {
+        if (!it || typeof it.name !== 'string' || typeof it.data !== 'string') continue;
+        let bytes;
+        try {
+          const res = await fetch('data:' + (it.mime || 'application/octet-stream') + ';base64,' + it.data);
+          bytes = await res.arrayBuffer();
+        } catch {
+          const raw = atob(it.data);
+          bytes = Uint8Array.from(raw, c => c.charCodeAt(0)).buffer;
+        }
+        dt.items.add(new File([bytes], it.name, { type: it.mime || 'application/octet-stream' }));
+      }
+      if (!dt.files.length) return { ok: false, error: 'no-files' };
+      dt.effectAllowed = 'copy';
+      const target = document.elementFromPoint(x, y) ||
+        (document.activeElement && document.activeElement.nodeType === 1 ? document.activeElement : null) ||
+        document.body;
+      const options = { bubbles: true, cancelable: true, composed: true, dataTransfer: dt };
+      target.dispatchEvent(new DragEvent('dragenter', options));
+      target.dispatchEvent(new DragEvent('dragover', options));
+      target.dispatchEvent(new DragEvent('drop', options));
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: String((error && error.message) || error) };
     }
-    const r = ifr.getBoundingClientRect();
-    const zoom = zooms[id] ?? 1;
-    const x = r.x + center.x * zoom;
-    const y = r.y + center.y * zoom;
-    return {
-      ok: true, x, y,
-      restore: wasOff ? () => {
-        pane.style.position = ''; pane.style.left = ''; pane.style.top = '';
-        pane.style.zIndex = ''; pane.style.opacity = '';
-      } : null
-    };
   }
 
   async function send() {
@@ -671,16 +678,16 @@
     const sentAtts = attachments.slice();
     await ensureFrames();
     window.__wbAttachLog.push({ step: 'after-ensure', atts: sentAtts.length });
-    // —— 附件通道规划：有文件输入框选择器的平台走内容脚本文件赋值；其余走 CDP 拖放 ——
+    // —— 附件通道规划：有文件输入框选择器的平台走内容脚本文件赋值；其余走帧内主世界拖放 ——
     // 两条通道按平台互斥，杜绝同一附件被注入两次。
-    const attPlan = {};        // id -> 'input' | 'cdp'
-    const cdpDispatched = {};  // id -> bool（仅 cdp 平台）
+    const attPlan = {};        // id -> 'input' | 'drop'
+    const dropDispatched = {};  // id -> bool（仅 drop 平台）
     const attNames = sentAtts.map(a => a.name);
     for (const [id, p] of Object.entries(frames)) {
       const sel = p.adapter.attachment && p.adapter.attachment.selectors;
-      attPlan[id] = sel && sel.length ? 'input' : 'cdp';
+      attPlan[id] = sel && sel.length ? 'input' : 'drop';
     }
-    const cdpAccepted = {};
+    const dropAccepted = {};
     const attachmentBlocked = new Set();
     if (sentAtts.length > 0) {
       try {
@@ -690,39 +697,43 @@
           for (const [id, p] of Object.entries(frames)) {
             if (!enabled.has(id)) continue;
             const host = FRAME_HOSTS[id];
-            if (!host || attPlan[id] !== 'cdp') continue;
-            let restore = null;
+            if (!host || attPlan[id] !== 'drop') continue;
             try {
-              const coords = await attachCoordsFor(id);
-              if (!coords.ok) throw new Error(coords.error);
-              restore = coords.restore;
-              const res = await Promise.race([
-                chrome.runtime.sendMessage({ type: 'WB_ATTACH', tabId: tab.id, x: coords.x, y: coords.y, items }),
+              const frameId = await frameIdOfAdapter(id);
+              if (frameId == null) throw new Error('no-frame');
+              const center = await editorCenterInFrame(frameId);
+              if (!center) throw new Error('no-editor');
+              // 帧内主世界合成拖放：坐标是帧内局部坐标，无需窗格可见性处理；
+              // 直接由 chrome.scripting 把 dropFilesInFrame 注入目标帧执行。
+              const injected = await Promise.race([
+                chrome.scripting.executeScript({
+                  target: { tabId: tab.id, frameIds: [frameId] },
+                  world: 'MAIN',
+                  func: dropFilesInFrame,
+                  args: [{ x: center.x, y: center.y, items }]
+                }),
                 new Promise((_, rej) => setTimeout(() => rej(new Error('附件注入超时')), 10000))
               ]);
-              cdpDispatched[id] = !!(res && res.ok);
-              window.__wbAttachLog.push({ id, plan: 'cdp', dispatched: cdpDispatched[id], error: res?.error || '' });
-              if (!cdpDispatched[id]) {
-                if (restore) restore();
+              const res = injected && injected[0] ? injected[0].result : null;
+              dropDispatched[id] = !!(res && res.ok);
+              window.__wbAttachLog.push({ id, plan: 'drop', dispatched: dropDispatched[id], error: res?.error || '' });
+              if (!dropDispatched[id]) {
                 showToast(id, '附件拖放失败: ' + (res?.error || 'UNKNOWN'));
                 continue;
               }
-              // 派发完成立刻恢复离屏窗格位置（缩短遮挡窗口期）
-              if (restore) { restore(); restore = null; }
               // 等平台消化后询问内容脚本是否真正接受（上传卡/文件名可见），诚实反馈
               await new Promise(r => setTimeout(r, 2000));
               const chk = await postAndWait(id, { type: 'WB_ATTACH_CHECK', frameId: id, names: attNames }, 3000);
               const accepted = !!(chk && chk.attached);
-              cdpAccepted[id] = accepted;
-              window.__wbAttachLog.push({ id, plan: 'cdp', accepted });
+              dropAccepted[id] = accepted;
+              window.__wbAttachLog.push({ id, plan: 'drop', accepted });
               showToast(id, accepted ? '附件已注入' : '附件未被平台接受，请手动添加');
               if (!accepted) attachmentBlocked.add(id);
             } catch (e) {
-              cdpDispatched[id] = false;
-              window.__wbAttachLog.push({ id, plan: 'cdp', dispatched: false, error: e.message });
+              dropDispatched[id] = false;
+              window.__wbAttachLog.push({ id, plan: 'drop', dispatched: false, error: e.message });
               showToast(id, '附件失败: ' + e.message);
             }
-            if (restore) restore();
             await new Promise(r => setTimeout(r, 600));
           }
         }
@@ -781,9 +792,9 @@
           continue;
         }
         const cfg = sendCfg(p.adapter, text, sentAtts);
-        // 附件：仅让规划通道对应的帧保留附件（input 平台走内容脚本；cdp 平台仅在拖放派发失败时兜底）
+        // 附件：仅让规划通道对应的帧保留附件（input 平台走内容脚本；drop 平台仅在拖放派发失败时兜底）
         if (sentAtts.length > 0) {
-          const keep = attPlan[id] === 'input' || (attPlan[id] === 'cdp' && !cdpDispatched[id]);
+          const keep = attPlan[id] === 'input' || (attPlan[id] === 'drop' && !dropDispatched[id]);
           if (!keep) { delete cfg.attachments; delete cfg.attachment; }
         }
         jobs.push((async () => {
@@ -1178,7 +1189,7 @@
       a.click();
       setTimeout(() => URL.revokeObjectURL(objectURL), 60000);
       availableRelease = zrel;
-      renderUpdate('downloaded', `v${latest} 已下载并校验。解压后双击 install.bat，安装器将打开智囊并启用新版。`);
+      renderUpdate('downloaded', `v${latest} 已下载并校验。解压后运行 install.bat，或直接重启智囊（桌面图标）自动完成更新。`);
     } catch (error) {
       retryAction = 'download';
       renderUpdate('error', '下载失败，请重试。未安装任何文件。');
@@ -1202,7 +1213,7 @@
         if (availableRelease) {
           renderUpdate('available', isStoreBuild
             ? '发现新版本，点击通过 Edge 更新'
-            : '发现新版本，点击下载更新');
+            : '发现新版本，重启智囊（桌面图标）将自动更新；也可点击下载更新包');
         } else {
           renderUpdate('current', '已是最新版');
         }

@@ -1,6 +1,6 @@
 // 逐平台附件注入接受度矩阵（通道级验证，不发送真实消息）：
 // - input 平台（适配器有文件输入框选择器）：WB_INJECT noSend 文件赋值路径
-// - cdp 平台（无选择器）：WB_ATTACH CDP 拖放路径
+// - drop 平台（无选择器）：WB_ATTACH 帧内主世界合成拖放路径
 // 证据：drop 事件监听（files/name/trusted）、帧 body 是否出现文件名（平台接受并展示上传卡）、
 //       document.hasFocus()（检测点击 openSelector 是否弹出了原生文件对话框）。
 // 前置：Edge 以 --load-extension=Windows/edge-extension --remote-debugging-port=9223 --no-startup-window 运行（见 edge-e2e.mjs）。
@@ -10,7 +10,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { assertCleanWorkbenchTargets, ensureSingleWorkbenchPage } from './edge-workbench-target.mjs';
 
-const EXT_ID = process.argv[2] || 'eeppnjgcjioaohaaoaknkkafhodccmmf';
+const EXT_ID = process.argv[2] || 'mklpdfdkbchlahfahofajchfjphlpkek';
 const FULL = process.argv.includes('--full');
 const PORT = Number(process.env.PWB_EDGE_PORT || 9223);
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
@@ -136,7 +136,7 @@ const order = adapters.filter(a => !(a.attachment && a.attachment.selectors && a
 
 for (const a of order) {
   const t = frameOf(a);
-  const plan = (a.attachment && a.attachment.selectors && a.attachment.selectors.length) ? 'input' : 'cdp';
+  const plan = (a.attachment && a.attachment.selectors && a.attachment.selectors.length) ? 'input' : 'drop';
   const row = { id: a.id, plan };
   if (!t) { row.error = 'no-frame'; matrix.push(row); console.log(`\n=== ${a.id}：无 frame，跳过 ===`); continue; }
   // 环境检查：frame 是否停在登录页
@@ -190,27 +190,38 @@ for (const a of order) {
             }, (res) => r(res && res[0] ? res[0].result : null));
           });
           if (!rect) return done({ ok: false, error: 'no-editor' });
-          const ifr = document.getElementById('frame-${a.id}');
-          if (!ifr) return done({ ok: false, error: 'no-iframe' });
-          // 离屏窗格临时移入视口左上角（命中测试需要视口内坐标）
-          const pane = ifr.closest('.pane');
-          const wasOff = pane && pane.classList.contains('offscreen');
-          if (wasOff) {
-            pane.style.position = 'fixed'; pane.style.left = '0px'; pane.style.top = '0px';
-            pane.style.zIndex = '9999'; pane.style.opacity = '0.01';
-          }
-          const r = ifr.getBoundingClientRect();
-          const restore = () => {
-            if (!wasOff) return;
-            pane.style.position = ''; pane.style.left = ''; pane.style.top = '';
-            pane.style.zIndex = ''; pane.style.opacity = '';
-          };
-          chrome.runtime.sendMessage({ type: 'WB_ATTACH', tabId: tab.id, x: r.x + rect.x, y: r.y + rect.y,
-            items: [{ mime: 'image/png', data: '${B64}', name: 'tiny.png' }] }, (res) => {
-            restore();
-            done({ ok: !!(res && res.ok), error: (res && res.error) || '', x: r.x + rect.x, y: r.y + rect.y, frameId: f.frameId });
+          // 与 workbench.js 生产路径一致：executeScript(world:'MAIN') 注入帧内合成拖放。
+          chrome.scripting.executeScript({
+            target: { tabId: tab.id, frameIds: [f.frameId] },
+            world: 'MAIN',
+            func: async (payload) => {
+              try {
+                const { x, y, items } = payload || {};
+                if (!Array.isArray(items) || !items.length || typeof x !== 'number' || typeof y !== 'number') {
+                  return { ok: false, error: 'bad-args' };
+                }
+                const dt = new DataTransfer();
+                for (const it of items) {
+                  const res = await fetch('data:' + (it.mime || 'application/octet-stream') + ';base64,' + it.data);
+                  const buf = await res.arrayBuffer();
+                  dt.items.add(new File([buf], it.name, { type: it.mime || 'application/octet-stream' }));
+                }
+                if (!dt.files.length) return { ok: false, error: 'no-files' };
+                dt.effectAllowed = 'copy';
+                const target = document.elementFromPoint(x, y) || document.body;
+                const options = { bubbles: true, cancelable: true, composed: true, dataTransfer: dt };
+                target.dispatchEvent(new DragEvent('dragenter', options));
+                target.dispatchEvent(new DragEvent('dragover', options));
+                target.dispatchEvent(new DragEvent('drop', options));
+                return { ok: true };
+              } catch (error) { return { ok: false, error: String(error && error.message || error) }; }
+            },
+            args: [{ x: rect.x, y: rect.y, items: [{ mime: 'image/png', data: '${B64}', name: 'tiny.png' }] }]
+          }, (resList) => {
+            const res = resList && resList[0] ? resList[0].result : null;
+            done({ ok: !!(res && res.ok), error: (res && res.error) || '', x: rect.x, y: rect.y, frameId: f.frameId });
           });
-          setTimeout(() => { restore(); done({ ok: false, error: '页面侧超时' }); }, 20000);
+          setTimeout(() => done({ ok: false, error: '页面侧超时' }), 20000);
         });
       }))`;
       const raw = await cdp(page.webSocketDebuggerUrl, expr, 25000);

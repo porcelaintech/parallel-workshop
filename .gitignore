@@ -22,3 +22,6 @@ Windows/native/**/.vs/
 Windows/native/**/*.user
 *.pfx
 artifacts/
+
+# 扩展签名私钥（CRX 打包用，绝不入库）
+keys/

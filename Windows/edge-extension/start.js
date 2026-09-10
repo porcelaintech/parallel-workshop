@@ -1,10 +1,9 @@
 (() => {
   'use strict';
-  // This local file paints before Edge finishes loading extensions. It waits for
-  // the actual extension resource, never a fixed warm-up delay or an empty tab.
-  // workbench.html was already public in older releases, so this also upgrades
-  // an installed 0.3.x extension whose in-memory manifest does not know launch.
-  const launchURL = 'chrome-extension://eeppnjgcjioaohaaoaknkkafhodccmmf/workbench.html';
+  // 本地入口页：file:// 页面在 Edge 冷启动（含首屏同步弹窗竞争）时也能稳定加载。
+  // 它轮询扩展资源是否就绪（fetch 成功或导航探测），然后导航到扩展启动页；
+  // launch.html 在 web_accessible_resources 中，跨源导航合法。
+  const launchURL = 'chrome-extension://mklpdfdkbchlahfahofajchfjphlpkek/launch.html';
   const status = document.getElementById('launch-status');
   const progress = document.getElementById('launch-progress');
   const retry = document.getElementById('launch-retry');
@@ -27,18 +26,26 @@
         if (response.ok) {
           progress.value = 2;
           status.textContent = '智囊已就绪，正在打开…';
-          window.location.replace(`${launchURL}#launch`);
+          window.location.replace(launchURL);
           return;
         }
       } catch { /* Retry only until extension registration is ready. */ }
       finally { clearTimeout(timer); }
       await new Promise(resolve => setTimeout(resolve, 200));
     } while (Date.now() < deadline);
-    progress.value = 0;
-    status.textContent = '暂未连接到智囊，请确认当前 Edge 用户已启用扩展';
-    retry.hidden = false;
-    help.hidden = false;
-    active = false;
+    // 兜底：扩展此刻必已由命令行加载；直接尝试导航，失败则给出明确指引。
+    progress.value = 2;
+    status.textContent = '正在打开智囊…';
+    window.location.replace(launchURL);
+    setTimeout(() => {
+      if (document.visibilityState !== 'hidden') {
+        progress.value = 0;
+        status.textContent = '暂未连接到智囊，请确认通过桌面「智囊」图标启动';
+        retry.hidden = false;
+        help.hidden = false;
+        active = false;
+      }
+    }, 2000);
   }
 
   retry.addEventListener('click', connect);

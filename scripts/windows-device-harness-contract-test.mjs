@@ -94,9 +94,10 @@ requireText(live.includes('requestedNoLaunch = $true') && live.includes('request
 requireText(live.includes('$edgeSnapshotCaptured = $true') && live.includes('if ($edgeSnapshotCaptured)'),
   '前置失败时不得把既有 Edge 进程误报为测试新进程');
 requireText(!/\bStart-Process\b/.test(live) &&
-  live.includes("$launchProbe.Arguments -match 'about:blank|--user-data-dir'") &&
-  live.includes("$launchProbe.ProfileDirectory -notmatch '^(Default|Profile \\d+)$'"),
-  '真机测试不得启动 Edge，必须拒绝 blank/独立 profile，只允许选择正常的现有 profile');
+  live.includes(`([string]$launchProbe.Arguments).Contains('--load-extension="' + $installed + '"')`) &&
+  live.includes(`([string]$launchProbe.Arguments).Contains('--user-data-dir=')`) &&
+  live.includes(`$launchProbe.Arguments -match 'about:blank'`),
+  '真机测试不得启动 Edge；必须验证启动参数用命令行加载本次安装并启用独立 profile，且拒绝 blank 预热');
 
 const qa = read('scripts/qa.sh');
 requireText(qa.includes('node scripts/windows-device-harness-contract-test.mjs || FAIL=1'),
