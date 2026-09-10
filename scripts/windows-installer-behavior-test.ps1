@@ -144,7 +144,9 @@ try {
     $args = Get-LaunchArguments $currentDir
     Assert-True ($args.Contains('--load-extension="' + $installedDir + '"')) 'Launch args must load the extension without developer mode'
     Assert-True ($args.Contains('--user-data-dir=')) 'Launch args must use a dedicated Edge profile'
-    Assert-True ($args.Contains('chrome-extension://mklpdfdkbchlahfahofajchfjphlpkek/launch.html')) 'Launch args must open the launcher page'
+    $expectedStartURL = [Uri]::new((Join-Path $installedDir 'start.html'), [UriKind]::Absolute).AbsoluteUri
+    Assert-True ($args.Contains($expectedStartURL)) 'Launch args must open the visible local entry page'
+    Assert-True (-not $args.Contains('about:blank')) 'Launch args must not warm blank tabs'
 
     # 启动器自动更新：索引版本与当前一致 → 不下载；更高版本 → 下载校验并激活版本化目录
     $script:httpCalls = @()
