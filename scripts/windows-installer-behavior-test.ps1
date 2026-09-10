@@ -137,6 +137,8 @@ try {
     Assert-True (@(Get-ChildItem -LiteralPath $installRoot -Force | Where-Object { $_.Name -like '.edge-extension.*' }).Count -eq 0) 'Successful rollback must remove staging and backup directories'
 
     # —— 启动器：current.txt 解析 + 启动参数形态 ——
+    # launch.ps1 的 productRoot = 包含 edge-extension-<version> 的目录（即 InstallRoot）
+    $productRoot = $installRoot
     $currentDir = Get-CurrentExtensionDir
     Assert-True ($currentDir -eq $installedDir) 'Launcher must resolve the current versioned directory'
     $args = Get-LaunchArguments $currentDir
