@@ -41,11 +41,12 @@ if (-not $pkg) { throw '安装后未找到应用包' }
 Write-Step "已安装: $($pkg.PackageFamilyName) v$($pkg.Version)"
 
 # —— 3. 启动（携带 WebView2 调试端口，供六窗格取证）——
-# 必须由本进程直接激活（ShellExecute 继承本进程环境变量）；经 explorer.exe 转手会丢失
-# WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS（explorer 是常驻进程，环境不含我们刚设的变量）。
+# 应用内的测试钩子读取 %TEMP%\pwb-test-cdp-port.txt 启用调试端口（不依赖环境变量传递，
+# 打包应用的激活链不受 explorer/ShellExecute 环境继承影响）。
+Set-Content -LiteralPath (Join-Path ([IO.Path]::GetTempPath()) 'pwb-test-cdp-port.txt') -Value "$Port" -Encoding ASCII
 $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = "--remote-debugging-port=$Port"
 Start-Process -FilePath "shell:AppsFolder\$($pkg.PackageFamilyName)!App" | Out-Null
-Write-Step '已发起启动（本进程环境继承 WebView2 调试参数）'
+Write-Step '已发起启动（应用内调试端口钩子已就绪）'
 
 # —— 4. 轮询进程与调试端口 ——
 $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
