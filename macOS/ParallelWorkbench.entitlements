@@ -11,5 +11,11 @@
 	<!-- 附件：用户通过文件选择器选择的文件只读访问 -->
 	<key>com.apple.security.files.user-selected.read-only</key>
 	<true/>
+	<!-- 语音输入：麦克风（AVAudioEngine 录音） -->
+	<key>com.apple.security.device.audio-input</key>
+	<true/>
+	<!-- 语音输入：系统语音识别（SFSpeechRecognizer 实时转写） -->
+	<key>com.apple.security.speech-recognition</key>
+	<true/>
 </dict>
 </plist>
