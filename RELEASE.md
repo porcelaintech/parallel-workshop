@@ -27,6 +27,8 @@
    - 注意：提交前按 Partner Center 提示处理 manifest 中的 `key` 字段（商店会分配正式 ID）
 4. 审核通过后：用户在商店一键安装
 
+> **无开发者账号的临时方案（当前 v0.4.1 在用）**：`scripts/package-app.sh` 自动做 ad-hoc 签名，DMG 内置安装说明。一键安装路径完全无 Gatekeeper 弹窗；手动下载用户首次右键 → 打开（仅一次）。获得 Developer ID 后按路线 B 正式签名公证即可替换。
+
 ## 路线 B：macOS DMG（$99/年 Apple Developer）
 
 1. 注册 [Apple Developer Program](https://developer.apple.com/programs/)（$99/年）

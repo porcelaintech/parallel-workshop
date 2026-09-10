@@ -39,7 +39,11 @@ open "ParallelWorkbench-${VERSION}.dmg"
 
 ## 首次打开提示
 
-应用未签名（开源直发模型）：首次打开若提示「无法验证开发者」，**右键点击 App → 打开 → 再点打开** 即可；或在系统设置 → 隐私与安全性中允许。
+v0.4.1 起应用带 ad-hoc 签名（无 Apple Developer 账号下的 Gatekeeper 缓解）：
+
+- **推荐（完全无弹窗）**：用上方一键安装命令安装。curl 下载不写隔离属性，安装器会移除 quarantine，安装完成后双击即可直接打开，不会出现任何提示。
+- **手动下载 DMG**：把「智囊」拖进 Applications 后首次双击若提示「无法验证开发者」，**右键点击应用 → 打开 → 再点打开** 即可，只需一次（DMG 内附有「请先读我 - 安装说明.txt」）。
+- 想要彻底消除手动下载的提示，需要 Apple Developer Program 账号做 Developer ID 签名 + 公证（`scripts/sign-release.sh`，见 RELEASE.md 路线 B）。
 
 ## 使用要点
 

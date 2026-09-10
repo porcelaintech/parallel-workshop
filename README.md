@@ -47,7 +47,7 @@ curl -fsSL https://raw.githubusercontent.com/porcelaintech/parallel-workshop/mai
 $pwbInstaller = Join-Path $env:TEMP ('ParallelWorkbench-install-' + [Guid]::NewGuid().ToString('N') + '.ps1'); try { & curl.exe --fail --location --silent --show-error --retry 3 --retry-max-time 90 --connect-timeout 10 --max-time 60 'https://github.com/porcelaintech/parallel-workshop/releases/latest/download/install-windows.ps1' --output $pwbInstaller; if ($LASTEXITCODE -ne 0) { throw "安装器下载失败（curl 退出码 $LASTEXITCODE）" }; & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $pwbInstaller; if ($LASTEXITCODE -ne 0) { throw "智囊安装失败（退出码 $LASTEXITCODE）" } } finally { Remove-Item -LiteralPath $pwbInstaller -Force -ErrorAction SilentlyContinue }
 ```
 
-> 未签名开源分发：install.sh 校验 GitHub 资产摘要后安装并移除隔离属性；正式对外分发仍建议签名公证。npm 包和 Homebrew tap 尚未发布，因此不再宣传对应命令。
+> 开源分发签名说明：v0.4.1 起应用为 ad-hoc 签名。一键安装路径（curl + install.sh）下载不带隔离属性、安装时移除 quarantine，双击打开**无任何提示**；手动下载 DMG 首次打开右键 → 打开即可（仅一次）。要彻底消除手动下载的提示，需 Apple Developer 账号做签名公证（`scripts/sign-release.sh`）。npm 包和 Homebrew tap 尚未发布，因此不再宣传对应命令。
 
 安装过程中遇到等待或报错，可按[安装耗时反馈](INSTALL_FEEDBACK.md)提供最后一步输出。
 
