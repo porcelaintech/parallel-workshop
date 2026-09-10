@@ -64,13 +64,16 @@ while ((Get-Date) -lt $deadline) {
 }
 if (-not $procAlive) { throw '应用进程未出现（启动失败或立即崩溃）' }
 if (-not $targets -or $targets.Count -eq 0) {
-    # 失败前存档诊断（进程信息 + 端口监听），便于远端排查
+    # 失败前存档诊断（应用进程 + WebView2 浏览器进程命令行 + 端口 + 标记文件），便于远端排查
     $diag = @{
         processes = @(Get-Process -Name 'ParallelWorkbench' -ErrorAction SilentlyContinue |
             Select-Object Id, StartTime, Responding, MainWindowTitle)
+        webview2 = @(Get-CimInstance Win32_Process -Filter "Name like 'msedgewebview2%'" -ErrorAction SilentlyContinue |
+            Select-Object ProcessId, ParentProcessId, CommandLine)
         portLines = @(netstat -ano | Select-String ":$Port\s")
+        marker = @(Get-Content -LiteralPath (Join-Path ([IO.Path]::GetTempPath()) 'pwb-test-cdp-port.txt') -ErrorAction SilentlyContinue)
     }
-    $diag | ConvertTo-Json -Depth 4 |
+    $diag | ConvertTo-Json -Depth 5 |
         Set-Content -LiteralPath (Join-Path $evidenceDir 'diagnostics.json') -Encoding UTF8
     throw 'WebView2 调试端口不可达（窗格未创建）；诊断已存档 diagnostics.json'
 }
