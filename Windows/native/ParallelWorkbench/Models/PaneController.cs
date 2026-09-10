@@ -106,7 +106,8 @@ public sealed class PaneController
         var cv = WebView.CoreWebView2;
         cv.Settings.AreDefaultContextMenusEnabled = true;
         cv.Settings.IsStatusBarEnabled = false;
-        cv.Settings.AreDevToolsEnabled = false;
+        // 生产环境关闭 DevTools；仅内部真机测试（调试端口标记文件存在）时开放，供六窗格取证
+        cv.Settings.AreDevToolsEnabled = CdpTestPort() != null;
         cv.NavigationCompleted += OnNavigationCompleted;
         cv.NavigationStarting += OnNavigationStarting;
         cv.NewWindowRequested += OnNewWindowRequested;
