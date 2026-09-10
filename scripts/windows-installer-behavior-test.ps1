@@ -159,7 +159,7 @@ try {
     $zipSource = Join-Path $testRoot 'edge-extension.zip'
     $zipStageDir = Join-Path $testRoot 'zip-stage'
     New-Item -ItemType Directory -Path $zipStageDir -Force | Out-Null
-    Copy-Item -LiteralPath (Join-Path $sourceDir '*') -Destination $zipStageDir -Recurse -Force
+    Copy-Item -Path (Join-Path $sourceDir '*') -Destination $zipStageDir -Recurse -Force
     $manifestPath = Join-Path $zipStageDir 'manifest.json'
     $manifest = Get-Content -LiteralPath $manifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
     $manifest.version = $nextVersion
