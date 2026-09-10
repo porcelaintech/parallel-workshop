@@ -93,5 +93,20 @@ ${CHANNEL_KEYS}
 PLIST
 
 echo ""
-echo "✅ 已生成 ${APP}（未签名，仅限本机或信任来源使用）"
+echo ""
+echo "==> ad-hoc 代码签名（无开发者账号下的 Gatekeeper 缓解）"
+# 无 Apple Developer 账号时用 ad-hoc 签名：
+#   - 消除新版 macOS 对「未签名应用」的『已损坏/无法验证开发者』类误报；
+#   - 经 install.sh 安装（curl 下载不带隔离属性 + 移除 quarantine）后可直接打开，无任何弹窗；
+#   - 手动从浏览器下载 DMG 拖入 Applications 的用户，首次打开右键 → 打开即可（仅一次）。
+# 后续有 Developer ID 账号时，改用 scripts/sign-release.sh 做正式签名 + 公证。
+# 先清除复制过程中可能带进来的 AppleDouble/资源叉残渣（否则 codesign 拒绝签名）
+find "$APP" -name '._*' -delete 2>/dev/null || true
+xattr -cr "$APP" 2>/dev/null || true
+codesign --force --deep --sign - "$APP"
+codesign --verify --deep --strict "$APP"
+echo "   签名身份: $(codesign -dv "$APP" 2>&1 | awk -F= '/Signature/{print $2}')"
+
+echo ""
+echo "✅ 已生成 ${APP}（ad-hoc 签名；正式对外分发建议用 scripts/sign-release.sh 做 Developer ID 公证）"
 echo "   双击运行：open \"${APP}\""
