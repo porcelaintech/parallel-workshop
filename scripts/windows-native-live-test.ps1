@@ -25,6 +25,8 @@ if (-not (Test-Path -LiteralPath $pfx)) { throw "缺少测试签名证书: $pfx"
 $pfxPassword = ConvertTo-SecureString -String 'pwb-ci-dev' -Force -AsPlainText
 Import-PfxCertificate -FilePath $pfx -CertStoreLocation 'Cert:\CurrentUser\My' -Password $pfxPassword | Out-Null
 Import-PfxCertificate -FilePath $pfx -CertStoreLocation 'Cert:\CurrentUser\TrustedPeople' -Password $pfxPassword | Out-Null
+# 自签证书本身即根：必须同时进入「受信任的根证书颁发机构」，否则 MSIX 签名链校验报 0x800B0109
+Import-PfxCertificate -FilePath $pfx -CertStoreLocation 'Cert:\CurrentUser\Root' -Password $pfxPassword | Out-Null
 Write-Step '测试证书已导入并信任'
 
 # —— 2. 安装 MSIX ——
