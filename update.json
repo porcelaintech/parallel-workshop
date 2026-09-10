@@ -2,8 +2,8 @@
   "schemaVersion": 1,
   "version": "0.4.1",
   "dmgURL": "https://github.com/porcelaintech/parallel-workshop/releases/download/v0.4.1/ParallelWorkbench-0.4.1.dmg",
-  "dmgSHA256": "56d430ef721e7386ee8f337d35f47e896b62da739e09bdc36d1bd32322945b00",
+  "dmgSHA256": "82a5eeed47d75dfe17c3b9a745386e8fef588a39b3e701790889de273081bb5b",
   "edgeURL": "https://github.com/porcelaintech/parallel-workshop/releases/download/v0.4.1/edge-extension.zip",
-  "edgeSHA256": "fee7f16c07964fc417553101637b93c3cfb93da67bd71f11689b03049b11af25",
+  "edgeSHA256": "d23bb3e656a930728d76a01314c8ff3d307f779ef4e358f3f2f8c58820109420",
   "notes": "智囊 · Braintrust v0.4.1"
 }
