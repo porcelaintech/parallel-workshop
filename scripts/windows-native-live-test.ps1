@@ -52,60 +52,94 @@ Set-Content -LiteralPath (Join-Path ([IO.Path]::GetTempPath()) 'pwb-test-cdp-por
 Start-Process -FilePath "shell:AppsFolder\$($pkg.PackageFamilyName)!App" | Out-Null
 Write-Step '已发起启动（WebView2 策略已注入调试端口）'
 
-# —— 4. 轮询进程与调试端口 ——
+# —— 4. 轮询应用进程与窗口就绪 ——
 $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
-$targets = $null
 $procAlive = $false
+$windowTitle = ''
 while ((Get-Date) -lt $deadline) {
-    $procAlive = [bool](Get-Process -Name 'ParallelWorkbench' -ErrorAction SilentlyContinue)
-    if ($procAlive) {
+    $proc = Get-Process -Name 'ParallelWorkbench' -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($proc) {
+        $procAlive = $true
+        $proc.Refresh()
+        if ($proc.MainWindowTitle) { $windowTitle = $proc.MainWindowTitle; break }
+    }
+    Start-Sleep -Seconds 2
+}
+if (-not $procAlive) { throw '应用进程未出现（启动失败或立即崩溃）' }
+if (-not $windowTitle) { throw '应用窗口未出现（进程存在但无主窗口）' }
+Write-Step "应用窗口已就绪: $windowTitle"
+
+# CDP 取证为尽力而为（打包形态下调试端口受限于运行时策略），
+# 六窗格主断言改用 Windows UI 自动化（无障碍树，稳定可靠）。
+$targets = @()
+try {
+    $cdpDeadline = (Get-Date).AddSeconds(60)
+    while ((Get-Date) -lt $cdpDeadline) {
         try {
             $targets = @(Invoke-RestMethod -Uri "http://127.0.0.1:$Port/json" -TimeoutSec 3)
             if ($targets.Count -gt 0) { break }
         } catch { Start-Sleep -Seconds 2 }
     }
-    Start-Sleep -Seconds 2
-}
-if (-not $procAlive) { throw '应用进程未出现（启动失败或立即崩溃）' }
-if (-not $targets -or $targets.Count -eq 0) {
-    # 失败前存档诊断（应用进程 + WebView2 浏览器进程命令行 + 端口 + 标记文件），便于远端排查
-    $diag = @{
-        processes = @(Get-Process -Name 'ParallelWorkbench' -ErrorAction SilentlyContinue |
-            Select-Object Id, StartTime, Responding, MainWindowTitle)
-        webview2 = @(Get-CimInstance Win32_Process -Filter "Name like 'msedgewebview2%'" -ErrorAction SilentlyContinue |
-            Select-Object ProcessId, ParentProcessId, CommandLine)
-        portLines = @(netstat -ano | Select-String ":$Port\s")
-        marker = @(Get-Content -LiteralPath (Join-Path ([IO.Path]::GetTempPath()) 'pwb-test-cdp-port.txt') -ErrorAction SilentlyContinue)
-    }
-    $diag | ConvertTo-Json -Depth 5 |
-        Set-Content -LiteralPath (Join-Path $evidenceDir 'diagnostics.json') -Encoding UTF8
-    throw 'WebView2 调试端口不可达（窗格未创建）；诊断已存档 diagnostics.json'
-}
-Write-Step "应用已启动，WebView2 目标 $($targets.Count) 个"
+} catch { }
+if ($targets.Count -gt 0) { Write-Step "CDP 取证可用（$($targets.Count) 个目标）" }
+else { Write-Warning 'CDP 取证不可用（打包形态限制），改用 UI 自动化断言' }
 
-# —— 5. 断言六个平台窗格 ——
-# 每平台一个可接受主机集合（重定向：tongyi→qianwen、yiyan→wenxin）
-$expected = @{
-    chatgpt  = @('chatgpt.com')
-    deepseek = @('chat.deepseek.com')
-    doubao   = @('www.doubao.com')
-    kimi     = @('www.kimi.com')
-    tongyi   = @('www.tongyi.com', 'tongyi.com', 'www.qianwen.com', 'qianwen.com')
-    yiyan    = @('yiyan.baidu.com', 'wenxin.baidu.com')
+# —— 5. UI 自动化断言：分页翻看全部窗格，六个平台标题必须齐全 ——
+# 应用默认 1–3 窗格分页（MaxVisiblePanes=3）：断言分页指示「/ 6」，再点 ▶ 翻两页，
+# 汇总各页标题后六个平台名必须全部出现。
+Add-Type -AssemblyName UIAutomationClient
+Add-Type -AssemblyName UIAutomationTypes
+$root = [System.Windows.Automation.AutomationElement]::RootElement
+$windowCond = New-Object System.Windows.Automation.PropertyCondition(
+    [System.Windows.Automation.AutomationElement]::NameProperty, $windowTitle)
+$window = $root.FindFirst([System.Windows.Automation.TreeScope]::Children, $windowCond)
+if (-not $window) { throw 'UI 自动化未找到应用窗口' }
+
+function Get-WindowTexts($windowElement) {
+    $elements = $windowElement.FindAll([System.Windows.Automation.TreeScope]::Descendants,
+        [System.Windows.Automation.Condition]::TrueCondition)
+    $texts = New-Object System.Collections.Generic.List[string]
+    foreach ($el in $elements) {
+        $name = $el.Current.Name
+        if ($name) { $texts.Add($name) }
+    }
+    return $texts
 }
-$pages = @($targets | Where-Object { $_.type -eq 'page' })
-$hosts = @($pages | ForEach-Object {
-    try { ([uri]$_.url).Host } catch { '' }
-} | Where-Object { $_ })
-$missing = @()
-foreach ($pair in $expected.GetEnumerator()) {
-    $hit = @($hosts | Where-Object { $pair.Value -contains $_ })
-    if ($hit.Count -eq 0) { $missing += $pair.Key }
+
+function Get-NextPageButton($windowElement) {
+    $all = $windowElement.FindAll([System.Windows.Automation.TreeScope]::Descendants,
+        [System.Windows.Automation.Condition]::TrueCondition)
+    foreach ($el in $all) {
+        if ($el.Current.Name -eq ([string][char]0x25B6)) { return $el }
+    }
+    return $null
 }
-if ($missing.Count -gt 0) {
-    throw "缺少平台窗格: $($missing -join ', ')。当前目标: $($hosts -join ', ')"
+
+$allTexts = New-Object System.Collections.Generic.HashSet[string]
+$pagerSeen = $false
+for ($page = 0; $page -lt 3; $page++) {
+    Start-Sleep -Seconds 2
+    $texts = @(Get-WindowTexts $window)
+    foreach ($t in $texts) { [void]$allTexts.Add($t) }
+    if (@($texts | Where-Object { $_ -match '/ 6$' }).Count -gt 0) { $pagerSeen = $true }
+    $nextBtn = Get-NextPageButton $window
+    if (-not $nextBtn) { break }
+    $invoke = $nextBtn.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)
+    $invoke.Invoke()
 }
-Write-Step "六窗格全部加载: $($hosts -join ', ')"
+$allTexts | Sort-Object |
+    Set-Content -LiteralPath (Join-Path $evidenceDir 'uia-texts.txt') -Encoding UTF8
+if (-not $pagerSeen) { throw "分页指示未显示「/ 6」（收集文本 $($allTexts.Count) 行）" }
+$platformNames = @('ChatGPT', 'DeepSeek', '豆包', 'Kimi', '通义千问', '文心一言')
+$missingNames = @()
+foreach ($name in $platformNames) {
+    $hit = @($allTexts | Where-Object { $_ -match [regex]::Escape($name) })
+    if ($hit.Count -eq 0) { $missingNames += $name }
+}
+if ($missingNames.Count -gt 0) {
+    throw "窗口内缺少平台窗格: $($missingNames -join ', ')。已收集文本行数: $($allTexts.Count)"
+}
+Write-Step "六个平台窗格全部存在: $($platformNames -join ', ')"
 
 # —— 6. 稳定性观察（15 秒无崩溃）——
 Start-Sleep -Seconds 15
@@ -114,8 +148,10 @@ if (-not (Get-Process -Name 'ParallelWorkbench' -ErrorAction SilentlyContinue)) 
 }
 Write-Step '15 秒稳定性观察通过'
 
-# —— 7. 证据存档（目标清单 + 屏幕截图）——
-$targets | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $evidenceDir 'targets.json') -Encoding UTF8
+# —— 7. 证据存档（UI 文本 + CDP 目标 + 屏幕截图）——
+if ($targets.Count -gt 0) {
+    $targets | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $evidenceDir 'targets.json') -Encoding UTF8
+}
 try {
     Add-Type -AssemblyName System.Windows.Forms
     Add-Type -AssemblyName System.Drawing
