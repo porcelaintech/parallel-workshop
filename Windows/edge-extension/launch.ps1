@@ -65,7 +65,7 @@ function Assert-InstalledExtension([string]$Path) {
 function Get-CurrentExtensionDir {
     $pointer = Join-Path $productRoot 'current.txt'
     if (Test-Path -LiteralPath $pointer) {
-        $current = (Get-Content -LiteralPath $pointer -Raw -Encoding UTF8).Trim()
+        $current = ((Get-Content -LiteralPath $pointer -Raw -Encoding UTF8) -replace [char]0xFEFF).Trim()
         if ($current) {
             $dir = Join-Path $productRoot ('edge-extension-' + $current)
             if (Test-Path -LiteralPath (Join-Path $dir 'manifest.json')) { return $dir }
@@ -121,7 +121,7 @@ function Update-IfAvailable([string]$CurrentDir) {
                 $targetDir = Join-Path $productRoot ('edge-extension-' + $version)
                 if (Test-Path -LiteralPath $targetDir) { Remove-Item -LiteralPath $targetDir -Recurse -Force }
                 Move-Item -LiteralPath $source -Destination $targetDir
-                Set-Content -LiteralPath (Join-Path $productRoot 'current.txt') -Value $version -Encoding UTF8
+                [IO.File]::WriteAllText((Join-Path $productRoot 'current.txt'), $version)  # UTF8 无 BOM
                 Write-Log "已更新到 v$version"
             } finally {
                 if (Test-Path -LiteralPath $zip) { Remove-Item -LiteralPath $zip -Force -ErrorAction SilentlyContinue }

@@ -205,7 +205,7 @@ try {
     ) 'bootstrap.install.first'
     $currentFile = Join-Path $installRoot 'current.txt'
     if (-not (Test-Path -LiteralPath $currentFile -PathType Leaf)) { throw '首次安装后 current.txt 不存在' }
-    $installed = Join-Path $installRoot ('edge-extension-' + ((Get-Content -LiteralPath $currentFile -Raw -Encoding UTF8).Trim()))
+    $installed = Join-Path $installRoot ('edge-extension-' + (((Get-Content -LiteralPath $currentFile -Raw -Encoding UTF8) -replace [char]0xFEFF).Trim()))
     $manifestPath = Join-Path $installed 'manifest.json'
     if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) { throw '首次安装后版本化目录 manifest.json 不存在' }
     $manifest = Get-Content -LiteralPath $manifestPath -Raw -Encoding UTF8 | ConvertFrom-Json

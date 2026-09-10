@@ -166,7 +166,7 @@ if (Test-Path -LiteralPath $backup) {
     catch { Write-Warning "新版已安装，但旧版备份未能删除：$backup" }
 }
 
-Set-Content -LiteralPath (Join-Path $targetRootFull 'current.txt') -Value $version -Encoding UTF8
+[IO.File]::WriteAllText((Join-Path $targetRootFull 'current.txt'), $version)  # UTF8 无 BOM（PS 5.1 Set-Content 会带 BOM，破坏路径拼接）
 
 # —— 迁移：移除旧版未版本化目录与临时残留（旧版靠开发者模式注册，新模型不再使用）——
 foreach ($legacy in @((Join-Path $targetRootFull 'edge-extension'))) {

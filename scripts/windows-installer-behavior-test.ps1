@@ -103,7 +103,7 @@ try {
     $installedDir = Join-Path $installRoot ('edge-extension-' + $version)
     & (Join-Path $sourceDir 'install.ps1') -TargetRoot $installRoot -NoLaunch -NoShortcuts -NoClipboard
     Assert-True (Test-Path -LiteralPath (Join-Path $installedDir 'manifest.json')) 'Versioned install directory must exist'
-    Assert-True ((Get-Content -LiteralPath (Join-Path $installRoot 'current.txt') -Raw -Encoding UTF8).Trim() -eq $version) 'current.txt must point at the installed version'
+    Assert-True (((Get-Content -LiteralPath (Join-Path $installRoot 'current.txt') -Raw -Encoding UTF8) -replace [char]0xFEFF).Trim() -eq $version) 'current.txt must point at the installed version'
 
     # 旧版未版本化目录必须被迁移清理
     New-Item -ItemType Directory -Path (Join-Path $installRoot 'edge-extension') -Force | Out-Null
