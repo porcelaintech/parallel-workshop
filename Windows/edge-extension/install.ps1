@@ -190,10 +190,14 @@ if (-not (Test-Path -LiteralPath $powershellPath)) { $powershellPath = 'powershe
 $launcherArgs = '-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + $launcherPath + '"'
 
 function Test-ProductShortcut($Shortcut, [string]$ProductRoot) {
-    # 新模型：快捷方式指向本产品的 launch.ps1（powershell.exe 目标）
+    # 新模型：快捷方式指向本产品的 launch.ps1（powershell.exe 目标，版本化目录）
     foreach ($relative in @('launch.bat', 'launch.ps1', 'edge-extension\launch.bat', 'edge-extension\launch.ps1')) {
         if ([string]$Shortcut.TargetPath -eq (Join-Path $ProductRoot $relative)) { return $true }
         if (([string]$Shortcut.Arguments).Contains('"' + (Join-Path $ProductRoot $relative) + '"')) { return $true }
+    }
+    # 版本化目录形态：Arguments 含 "<ProductRoot>\edge-extension-<version>\launch.ps1"
+    if (([string]$Shortcut.Arguments).Contains('"' + (Join-Path $ProductRoot 'edge-extension-'))) {
+        if (([string]$Shortcut.Arguments -match '\\edge-extension-\d+\.\d+\.\d+(\.\d+)?\\launch\.ps1["\s]')) { return $true }
     }
     # 旧版快捷方式形态（v0.4.0 及更早）
     if ([string]$Shortcut.Arguments -match 'chrome-extension://mklpdfdkbchlahfahofajchfjphlpkek/(workbench|launch)\.html(?:["\s]|$)') { return $true }
