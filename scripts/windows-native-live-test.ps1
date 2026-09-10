@@ -41,9 +41,11 @@ if (-not $pkg) { throw '安装后未找到应用包' }
 Write-Step "已安装: $($pkg.PackageFamilyName) v$($pkg.Version)"
 
 # —— 3. 启动（携带 WebView2 调试端口，供六窗格取证）——
+# 必须由本进程直接激活（ShellExecute 继承本进程环境变量）；经 explorer.exe 转手会丢失
+# WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS（explorer 是常驻进程，环境不含我们刚设的变量）。
 $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = "--remote-debugging-port=$Port"
-Start-Process -FilePath 'explorer.exe' -ArgumentList "shell:AppsFolder\$($pkg.PackageFamilyName)!App" | Out-Null
-Write-Step '已发起启动'
+Start-Process -FilePath "shell:AppsFolder\$($pkg.PackageFamilyName)!App" | Out-Null
+Write-Step '已发起启动（本进程环境继承 WebView2 调试参数）'
 
 # —— 4. 轮询进程与调试端口 ——
 $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
@@ -60,7 +62,17 @@ while ((Get-Date) -lt $deadline) {
     Start-Sleep -Seconds 2
 }
 if (-not $procAlive) { throw '应用进程未出现（启动失败或立即崩溃）' }
-if (-not $targets -or $targets.Count -eq 0) { throw 'WebView2 调试端口不可达（窗格未创建）' }
+if (-not $targets -or $targets.Count -eq 0) {
+    # 失败前存档诊断（进程信息 + 端口监听），便于远端排查
+    $diag = @{
+        processes = @(Get-Process -Name 'ParallelWorkbench' -ErrorAction SilentlyContinue |
+            Select-Object Id, StartTime, Responding, MainWindowTitle)
+        portLines = @(netstat -ano | Select-String ":$Port\s")
+    }
+    $diag | ConvertTo-Json -Depth 4 |
+        Set-Content -LiteralPath (Join-Path $evidenceDir 'diagnostics.json') -Encoding UTF8
+    throw 'WebView2 调试端口不可达（窗格未创建）；诊断已存档 diagnostics.json'
+}
 Write-Step "应用已启动，WebView2 目标 $($targets.Count) 个"
 
 # —— 5. 断言六个平台窗格 ——
