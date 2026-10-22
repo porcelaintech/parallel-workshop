@@ -4,13 +4,14 @@ import { mkdtempSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
 const folder = mkdtempSync(join(tmpdir(), 'pwb-update-index-test-'));
 const generator = new URL('./generate-update-manifest.mjs', import.meta.url);
 try {
   writeFileSync(join(folder, 'ParallelWorkbench-1.2.3.dmg'), 'test-dmg');
   writeFileSync(join(folder, 'edge-extension.zip'), 'test-edge');
-  const result = spawnSync(process.execPath, [generator.pathname, '1.2.3', folder], { encoding: 'utf8' });
+  const result = spawnSync(process.execPath, [fileURLToPath(generator), '1.2.3', folder], { encoding: 'utf8' });
   assert.equal(result.status, 0, result.stderr);
   const index = JSON.parse(readFileSync(join(folder, 'update.json'), 'utf8'));
   assert.equal(index.version, '1.2.3');
@@ -20,7 +21,7 @@ try {
   assert.equal(index.dmgURL, 'https://github.com/porcelaintech/parallel-workshop/releases/download/v1.2.3/ParallelWorkbench-1.2.3.dmg');
   assert.equal(index.edgeURL, 'https://github.com/porcelaintech/parallel-workshop/releases/download/v1.2.3/edge-extension.zip');
   const before = readFileSync(join(folder, 'update.json'));
-  const invalid = spawnSync(process.execPath, [generator.pathname, '../bad', folder]);
+  const invalid = spawnSync(process.execPath, [fileURLToPath(generator), '../bad', folder]);
   assert.notEqual(invalid.status, 0);
   assert.deepEqual(readFileSync(join(folder, 'update.json')), before);
 } finally {

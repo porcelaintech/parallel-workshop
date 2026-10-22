@@ -14,6 +14,7 @@
 | Edge/Chrome MV3 扩展 | `Windows/edge-extension/` | ✅ runtime 消息通道 + 本地胶水层验证（发布前仍需真机登录回归） |
 | 一键质量门禁 | `scripts/qa.sh` | ✅ 全绿 |
 | 打包/图标脚本 | `scripts/package-app.sh` `scripts/icon.swift` | ✅ |
+| 本地浏览器服务 | `local-service/`、`scripts/package-local-service.sh` | ✅ 服务入口与合同测试；真实浏览器矩阵待目标系统 |
 
 ## 运行方式
 
@@ -35,7 +36,15 @@ bash scripts/qa.sh
 # Edge 扩展
 bash scripts/build-edge-extension.sh
 # Edge → edge://extensions → 开发者模式 → 加载已解压的扩展 → Windows/edge-extension/
+
+# 本地浏览器服务
+node local-service/server.mjs --no-browser --print-ready
+node scripts/local-service-contract-test.mjs
+node scripts/local-service-update-test.mjs
+bash scripts/package-local-service.sh
 ```
+
+构建产物位于 `build/local-service/artifacts/`，使用 `BRAINTRUST_FETCH_RUNTIME=1 BRAINTRUST_FETCH_BROWSER=1 bash scripts/package-local-service.sh` 可生成携带 Node 22 和 Chromium 运行时的 Windows/macOS 压缩包、SHA-256 清单和更新索引。服务版不建立账户、会员或付费权限体系；用户登录仍在第三方 AI 官方网页完成。
 
 ## 验收证据（2026-08-29 自动测试实录）
 

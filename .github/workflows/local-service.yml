@@ -1,0 +1,60 @@
+name: Local browser service
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/store-foundation-20260908]
+    paths:
+      - 'local-service/**'
+      - 'scripts/local-service-*.mjs'
+      - 'scripts/local-service-*.ps1'
+      - '.github/workflows/local-service.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  windows-smoke:
+    runs-on: windows-2022
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+      - name: Parse Windows service scripts with PowerShell
+        shell: powershell
+        run: |
+          $files = @('local-service\launchers\windows\install.ps1', 'local-service\launchers\windows\launch.ps1', 'scripts\local-service-windows-smoke.ps1')
+          foreach ($file in $files) {
+            $path = (Resolve-Path $file).Path
+            $tokens = $null
+            $errors = $null
+            [Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$errors) | Out-Null
+            if ($errors.Count -gt 0) { throw ($errors | Out-String) }
+            $bytes = [IO.File]::ReadAllBytes($path)
+            if ($bytes.Length -lt 3 -or $bytes[0] -ne 0xEF -or $bytes[1] -ne 0xBB -or $bytes[2] -ne 0xBF) { throw "$file lacks UTF-8 BOM" }
+          }
+      - name: Run Windows service smoke test
+        shell: powershell
+        run: .\scripts\local-service-windows-smoke.ps1 -ServiceRoot (Resolve-Path local-service).Path
+      - name: Run shared service contracts
+        shell: powershell
+        run: |
+          node scripts/local-service-contract-test.mjs
+          node scripts/local-service-update-test.mjs
+
+  macos-smoke:
+    runs-on: macos-14
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+      - name: Run shared service contracts
+        run: |
+          node scripts/local-service-contract-test.mjs
+          node scripts/local-service-update-test.mjs
+      - name: Validate shell launchers
+        run: bash -n local-service/launchers/macos/install.sh local-service/launchers/macos/launch.sh scripts/package-local-service.sh

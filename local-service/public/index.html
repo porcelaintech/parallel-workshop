@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>智囊 · Braintrust</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div><span class="eyebrow">BRAINTRUST</span><h1>智囊</h1><p>一次提问，多位 AI 一起思考。</p></div>
+    <div class="status"><span id="status-dot"></span><span id="status-text">正在连接本地服务…</span><span id="version"></span></div>
+  </header>
+  <main>
+    <section class="composer">
+      <textarea id="question" rows="4" placeholder="输入问题，发送给已选平台"></textarea>
+      <div class="composer-actions"><div><div id="platforms" class="platforms"></div><label class="file-picker">添加附件 <input id="attachments" type="file" multiple></label></div><button id="send" class="primary">发送</button></div>
+    </section>
+    <section><div class="section-title"><h2>平台窗口</h2><button id="open-all" class="secondary">打开已选平台</button></div><div id="cards" class="cards"></div></section>
+    <section class="updates"><div><strong id="update-title">版本</strong><span id="update-text">正在读取本地状态…</span></div><button id="check-update" class="secondary">检查更新</button></section>
+    <pre id="log" class="log" aria-live="polite"></pre>
+  </main>
+  <script src="/config.js"></script><script src="/app.js"></script>
+</body>
+</html>

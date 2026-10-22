@@ -1,0 +1,8 @@
+{
+  "productName": "智囊 · Braintrust",
+  "version": "0.5.0",
+  "updateManifest": "https://github.com/porcelaintech/parallel-workshop/releases/latest/download/local-service-update.json",
+  "browser": "auto",
+  "openBrowser": true,
+  "selectedPlatforms": ["chatgpt", "deepseek", "doubao", "kimi", "tongyi", "yiyan"]
+}
