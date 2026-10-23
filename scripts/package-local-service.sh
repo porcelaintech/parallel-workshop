@@ -54,6 +54,11 @@ for artifact in "$OUT/artifacts"/*.zip; do
   name=$(basename "$artifact")
   printf '%s %s %s\n' "$name" "$size" "$sha256"
 done > "$OUT/artifacts/SHA256SUMS"
+if [[ "${BRAINTRUST_FETCH_RUNTIME:-0}" != "1" && "${BRAINTRUST_FETCH_BROWSER:-0}" != "1" ]]; then
+  while read -r name size sha; do
+    if (( size > 52428800 )); then echo "❌ 轻量包超过 50MB：$name ($size bytes)" >&2; exit 1; fi
+  done < "$OUT/artifacts/SHA256SUMS"
+fi
 cat > "$OUT/artifacts/local-service-update.json.example" <<EOF
 {
   "version": "$VERSION",

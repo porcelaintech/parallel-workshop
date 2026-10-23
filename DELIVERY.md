@@ -44,7 +44,7 @@ node scripts/local-service-update-test.mjs
 bash scripts/package-local-service.sh
 ```
 
-构建产物位于 `build/local-service/artifacts/`，使用 `BRAINTRUST_FETCH_RUNTIME=1 BRAINTRUST_FETCH_BROWSER=1 bash scripts/package-local-service.sh` 可生成携带 Node 22 和 Chromium 运行时的 Windows/macOS 压缩包、SHA-256 清单和更新索引。服务版不建立账户、会员或付费权限体系；用户登录仍在第三方 AI 官方网页完成。
+构建产物位于 `build/local-service/artifacts/`，默认生成不超过 50MB 的轻量 Windows/macOS 压缩包；首次启动按需下载并校验 Node 22，macOS 无系统浏览器时再下载 Chromium。开发者可用 `BRAINTRUST_FETCH_RUNTIME=1 BRAINTRUST_FETCH_BROWSER=1` 生成自包含测试包。服务版不建立账户、会员或付费权限体系；用户登录仍在第三方 AI 官方网页完成。
 
 ## 验收证据（2026-08-29 自动测试实录）
 
