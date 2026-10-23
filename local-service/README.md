@@ -12,7 +12,9 @@
 node server.mjs --no-browser --print-ready
 ```
 
-浏览器启动时会优先使用包内 Chromium for Testing，再使用 `BRAINTRUST_BROWSER_PATH` 指定的 Chromium/Edge，最后寻找系统浏览器。发布包用 `BRAINTRUST_FETCH_RUNTIME=1 BRAINTRUST_FETCH_BROWSER=1 bash scripts/package-local-service.sh` 可携带 Node 22 和 Chromium 运行时，因此用户无需自行安装运行环境。
+启动器会优先使用包内或系统 Node/浏览器；轻量发布包没有把它们塞进压缩包。缺少 Node 时，启动器会在用户数据目录下载并校验 Node 22；macOS 缺少 Edge/Chrome/Chromium 时，还会按架构下载并校验 Chromium。用户第一次点击可能需要等待运行时下载，后续启动使用本地缓存。
+
+开发者若需要构建自包含大包，可使用 `BRAINTRUST_FETCH_RUNTIME=1 BRAINTRUST_FETCH_BROWSER=1 bash scripts/package-local-service.sh`；正式分发默认使用轻量包。
 
 ## 安装入口
 
