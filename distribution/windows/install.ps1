@@ -1,5 +1,7 @@
 ﻿[CmdletBinding()]
-param()
+param(
+  [switch]$NoLaunch
+)
 
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
@@ -71,8 +73,12 @@ try {
     $shortcut.Save()
   }
 
-  Write-Host "==> 启动智囊"
-  & $launcher
+  if ($NoLaunch) {
+    Write-Host "==> 已跳过启动（-NoLaunch）"
+  } else {
+    Write-Host "==> 启动智囊"
+    & $launcher
+  }
   Write-Host "✅ 安装完成。以后双击桌面或开始菜单里的「智囊」即可打开。"
   Start-Sleep -Milliseconds 400
 } catch {
