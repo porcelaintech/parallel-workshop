@@ -4,11 +4,11 @@
   "notes": "智囊本地工作台 0.6.0 RC1",
   "artifacts": {
     "darwin-universal": {
-      "url": "https://braintrust-downloads-1738978343093082.oss-cn-hongkong.aliyuncs.com/downloads/Braintrust-local-service-macos-0.6.0.zip",
+      "url": "https://braintrust-downloads-1738978343093082.oss-accelerate.aliyuncs.com/downloads/Braintrust-local-service-macos-0.6.0.zip",
       "sha256": "e0f69191e546e42c06a2638f61debebd23b07b5031f81f81fdf1c15723414efa"
     },
     "win32-x64": {
-      "url": "https://braintrust-downloads-1738978343093082.oss-cn-hongkong.aliyuncs.com/downloads/Braintrust-local-service-windows-0.6.0.zip",
+      "url": "https://braintrust-downloads-1738978343093082.oss-accelerate.aliyuncs.com/downloads/Braintrust-local-service-windows-0.6.0.zip",
       "sha256": "91f96068930d3077867427576fd3af073713cbcdf9d5694b2fc5ce51e0f21623"
     }
   }
