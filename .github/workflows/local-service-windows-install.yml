@@ -99,8 +99,12 @@ jobs:
             if (-not (Test-Path -LiteralPath (Join-Path $root $item))) { throw "missing $item" }
           }
 
-          $lnk = Join-Path ([Environment]::GetFolderPath('Desktop')) '智囊.lnk'
-          if (-not (Test-Path -LiteralPath $lnk)) { throw 'Desktop shortcut missing' }
+          $desktop = [Environment]::GetFolderPath('Desktop')
+          $lnk = @('智囊.lnk', 'Braintrust.lnk') |
+            ForEach-Object { Join-Path $desktop $_ } |
+            Where-Object { Test-Path -LiteralPath $_ } |
+            Select-Object -First 1
+          if (-not $lnk) { throw 'Desktop shortcut missing (neither 智囊.lnk nor Braintrust.lnk)' }
           $shell = New-Object -ComObject WScript.Shell
           $shortcut = $shell.CreateShortcut($lnk)
           if ($shortcut.TargetPath -notlike '*powershell.exe') { throw "unexpected shortcut target: $($shortcut.TargetPath)" }

@@ -66,13 +66,23 @@ try {
   $dirs = @([Environment]::GetFolderPath('Desktop'), [Environment]::GetFolderPath('Programs')) | Where-Object { $_ }
   foreach ($dir in $dirs) {
     New-Item -ItemType Directory -Path $dir -Force | Out-Null
-    $shortcut = $shell.CreateShortcut((Join-Path $dir '智囊.lnk'))
-    $shortcut.TargetPath = $powershell
-    $shortcut.Arguments = $shortcutArgs
-    $shortcut.WorkingDirectory = $InstallRoot
-    $shortcut.IconLocation = (Join-Path $icons 'AppIcon.ico') + ',0'
-    $shortcut.Description = '智囊 · Braintrust 本地工作台'
-    $shortcut.Save()
+    $saved = $false
+    foreach ($name in @('智囊.lnk', 'Braintrust.lnk')) {
+      try {
+        $shortcut = $shell.CreateShortcut((Join-Path $dir $name))
+        $shortcut.TargetPath = $powershell
+        $shortcut.Arguments = $shortcutArgs
+        $shortcut.WorkingDirectory = $InstallRoot
+        $shortcut.IconLocation = (Join-Path $icons 'AppIcon.ico') + ',0'
+        $shortcut.Description = '智囊 · Braintrust 本地工作台'
+        $shortcut.Save()
+        $saved = $true
+        break
+      } catch {
+        Write-Warning "快捷方式 $name 创建失败：$($_.Exception.Message)"
+      }
+    }
+    if (-not $saved) { throw "无法在 $dir 创建「智囊」快捷方式" }
   }
 
   if ($NoLaunch) {
