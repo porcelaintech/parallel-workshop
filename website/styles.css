@@ -95,6 +95,15 @@ h1 .cn {
   transform: translateY(-1px);
 }
 
+.intel {
+  margin: 16px 0 0;
+  color: var(--faint);
+  font-size: 12px;
+}
+
+.intel a { color: var(--muted); text-decoration: underline; text-underline-offset: 3px; }
+.intel a:hover { color: var(--ink); }
+
 .repo {
   display: inline-flex;
   align-items: baseline;
@@ -113,5 +122,6 @@ h1 .cn {
   h1 { font-size: 32px; }
   .tagline { font-size: 14px; margin-top: 15px; }
   .downloads { gap: 20px; margin-top: 34px; }
+  .intel { margin-top: 14px; }
   .repo { margin-top: 48px; }
 }

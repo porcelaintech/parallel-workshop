@@ -14,7 +14,12 @@ website/
 
 ## 下载文件
 
-安装包托管在阿里云 OSS 香港桶（公开读，HTTPS）：
+安装包托管在阿里云 OSS 香港桶（公开读、HTTPS、传输加速）：
+
+- macOS Apple 芯片：`Braintrust-0.6.0.dmg`（41 MB，拖进 Applications）
+- macOS Intel：`Braintrust-0.6.0-intel.dmg`（42 MB）
+- Windows：`Braintrust-Setup-0.6.0.exe`（23 MB，双击安装）
+
 
 ```text
 https://braintrust-downloads-1738978343093082.oss-accelerate.aliyuncs.com/downloads/Braintrust-local-service-macos-0.6.0.zip

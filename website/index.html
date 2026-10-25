@@ -19,11 +19,31 @@
       <h1>Braintrust<span class="bar">｜</span><span class="cn">智囊</span></h1>
       <p class="tagline">一次提问，多位 AI 一起思考。</p>
       <nav class="downloads" aria-label="下载">
-        <a href="https://braintrust-downloads-1738978343093082.oss-accelerate.aliyuncs.com/downloads/Braintrust-0.6.0.dmg" download>下载 macOS<span class="arrow" aria-hidden="true">↓</span></a>
+        <a data-mac href="https://braintrust-downloads-1738978343093082.oss-accelerate.aliyuncs.com/downloads/Braintrust-0.6.0.dmg" data-intel="https://braintrust-downloads-1738978343093082.oss-accelerate.aliyuncs.com/downloads/Braintrust-0.6.0-intel.dmg" download>下载 macOS<span class="arrow" aria-hidden="true">↓</span></a>
         <a href="https://braintrust-downloads-1738978343093082.oss-accelerate.aliyuncs.com/downloads/Braintrust-Setup-0.6.0.exe" download>下载 Windows<span class="arrow" aria-hidden="true">↓</span></a>
       </nav>
+      <p class="intel">Intel Mac？<a href="https://braintrust-downloads-1738978343093082.oss-accelerate.aliyuncs.com/downloads/Braintrust-0.6.0-intel.dmg">下载 Intel 版</a></p>
       <a class="repo" href="https://github.com/porcelaintech/parallel-workshop" target="_blank" rel="noreferrer">GitHub<span class="arrow" aria-hidden="true">↗</span></a>
     </section>
   </main>
+  <script>
+    (() => {
+      const a = document.querySelector('[data-mac]');
+      if (!a) return;
+      const useIntel = () => { a.href = a.dataset.intel; };
+      if (navigator.userAgentData && navigator.userAgentData.getHighEntropyValues) {
+        navigator.userAgentData.getHighEntropyValues(['architecture'])
+          .then(v => { if (v.architecture === 'x86') useIntel(); })
+          .catch(() => {});
+      } else {
+        try {
+          const gl = document.createElement('canvas').getContext('webgl');
+          const ext = gl && gl.getExtension('WEBGL_debug_renderer_info');
+          const renderer = ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : '';
+          if (/intel/i.test(renderer)) useIntel();
+        } catch {}
+      }
+    })();
+  </script>
 </body>
 </html>

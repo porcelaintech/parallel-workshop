@@ -6,6 +6,7 @@ set -euo pipefail
 STAGE="${1:?usage: build-dmg.sh <stage-dir> <output.dmg> [version]}"
 OUT="${2:?usage: build-dmg.sh <stage-dir> <output.dmg> [version]}"
 VERSION="${3:-0.6.0}"
+ARCH="${4:-}"
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 PAYLOAD="$STAGE/local-service"
 ICON="$STAGE/assets/AppIcon.icns"
@@ -23,6 +24,17 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 chmod +x "$APP/Contents/MacOS/BraintrustLauncher"
 /usr/bin/ditto "$ICON" "$APP/Contents/Resources/AppIcon.icns"
 /usr/bin/ditto "$PAYLOAD" "$APP/Contents/Resources/service"
+
+# 单架构瘦身：Node 两套各 100MB+，且发行包里的 headers/npm/docs 对运行无用。
+# ARCH=arm64 或 x64 时只保留对应架构的 bin/node。
+if [ -n "$ARCH" ]; then
+  RUNTIME="$APP/Contents/Resources/service/runtime"
+  NODE_DIR="$RUNTIME/node-macos-$ARCH"
+  [ -x "$NODE_DIR/bin/node" ] || { echo "missing node runtime for $ARCH" >&2; exit 1; }
+  find "$RUNTIME" -mindepth 1 -maxdepth 1 -type d ! -name "node-macos-$ARCH" -exec rm -rf {} +
+  find "$NODE_DIR" -mindepth 1 -maxdepth 1 ! -name bin -exec rm -rf {} +
+  rm -f "$NODE_DIR/bin/npm" "$NODE_DIR/bin/npx" "$NODE_DIR/bin/corepack"
+fi
 
 cat > "$APP/Contents/Resources/config.sh" <<CONFIG
 INSTALL_ROOT="\$APP_ROOT/Contents/Resources/service"

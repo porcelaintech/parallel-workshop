@@ -5,7 +5,7 @@
   "artifacts": {
     "darwin-universal": {
       "url": "https://braintrust-downloads-1738978343093082.oss-accelerate.aliyuncs.com/downloads/Braintrust-0.6.0.dmg",
-      "sha256": "d75c2c6d117edcaabb07d4b974967474e81edb99a950890365c58b16ed96bc6a"
+      "sha256": "22759b1cfa388519a05782c45bcc29946e5a40a69fa5652898237d5cd70541ed"
     },
     "win32-x64": {
       "url": "https://braintrust-downloads-1738978343093082.oss-accelerate.aliyuncs.com/downloads/Braintrust-Setup-0.6.0.exe",
