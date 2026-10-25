@@ -1,0 +1,81 @@
+name: Windows installer smoke
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [release/local-service]
+    paths:
+      - '.github/workflows/windows-installer-smoke.yml'
+      - 'distribution/windows/**'
+
+permissions:
+  contents: read
+
+jobs:
+  installer:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    env:
+      CI: 'true'
+      BRAINTRUST_NO_DIALOG: '1'
+      BRAINTRUST_BROWSER_HEADLESS: '1'
+    steps:
+      - name: Download installer
+        shell: powershell
+        run: |
+          $url = 'https://github.com/porcelaintech/parallel-workshop/releases/download/v0.6.0-rc.1/Braintrust-Setup-0.6.0.exe'
+          Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile (Join-Path $env:RUNNER_TEMP 'setup.exe')
+          Get-Item (Join-Path $env:RUNNER_TEMP 'setup.exe') | Format-List Name,Length
+
+      - name: Silent install
+        shell: powershell
+        run: |
+          $setup = Join-Path $env:RUNNER_TEMP 'setup.exe'
+          $p = Start-Process -FilePath $setup -ArgumentList '/S' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "installer exit $($p.ExitCode)" }
+
+      - name: Verify install, shortcuts, launcher and Edge/CDP
+        shell: powershell
+        run: |
+          $root = Join-Path $env:LOCALAPPDATA 'Braintrust\service'
+          foreach ($item in @('server.mjs','launcher.ps1','launcher.vbs','runtime\node-win-x64\node.exe','assets\AppIcon.ico')) {
+            if (-not (Test-Path -LiteralPath (Join-Path $root $item))) { throw "missing $item" }
+          }
+          $shell = New-Object -ComObject WScript.Shell
+          $shortcuts = @()
+          foreach ($base in @([Environment]::GetFolderPath('Desktop'), (Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs'))) {
+            $shortcuts += Get-ChildItem -LiteralPath $base -Filter '*.lnk' -Recurse -ErrorAction SilentlyContinue
+          }
+          $found = $false
+          foreach ($file in $shortcuts) {
+            $s = $shell.CreateShortcut($file.FullName)
+            if ($s.Arguments -like '*launcher.vbs*' -and $s.IconLocation -like '*AppIcon.ico*') { $found = $true; Write-Host "shortcut=$($file.FullName)"; break }
+          }
+          if (-not $found) { throw 'installer shortcut with icon not found' }
+
+          $edge = @(
+            (Join-Path ${env:ProgramFiles(x86)} 'Microsoft\Edge\Application\msedge.exe'),
+            (Join-Path $env:ProgramFiles 'Microsoft\Edge\Application\msedge.exe'),
+            (Join-Path $env:LOCALAPPDATA 'Microsoft\Edge\Application\msedge.exe')
+          ) | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -First 1
+          if (-not $edge) { throw 'Edge not found' }
+          $env:BRAINTRUST_BROWSER_PATH = $edge
+          & (Join-Path $root 'launcher.ps1')
+          $jsonPath = Join-Path $env:LOCALAPPDATA 'Braintrust\data\service.json'
+          for ($i = 0; $i -lt 100 -and -not (Test-Path -LiteralPath $jsonPath); $i++) { Start-Sleep -Milliseconds 200 }
+          if (-not (Test-Path -LiteralPath $jsonPath)) { throw 'service.json missing' }
+          $info = Get-Content -LiteralPath $jsonPath -Raw -Encoding UTF8 | ConvertFrom-Json
+          $headers = @{ Authorization = "Bearer $($info.token)" }
+          $health = Invoke-RestMethod -Uri "http://127.0.0.1:$($info.port)/api/health" -Headers $headers -TimeoutSec 10
+          if (-not $health.browser.running) { throw 'browser not running' }
+          Write-Host "OK: $($health.browser.version.Browser)"
+          Invoke-RestMethod -Uri "http://127.0.0.1:$($info.port)/api/quit" -Method Post -Headers $headers -ContentType 'application/json' -Body '{}' -TimeoutSec 10 | Out-Null
+          if ($info.pid) { Stop-Process -Id $info.pid -Force -ErrorAction SilentlyContinue }
+
+      - name: Silent uninstall
+        shell: powershell
+        run: |
+          $un = Join-Path $env:LOCALAPPDATA 'Braintrust\Uninstall.exe'
+          if (-not (Test-Path -LiteralPath $un)) { throw 'uninstaller missing' }
+          $p = Start-Process -FilePath $un -ArgumentList '/S' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "uninstaller exit $($p.ExitCode)" }
