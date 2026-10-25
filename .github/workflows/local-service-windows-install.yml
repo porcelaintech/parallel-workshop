@@ -100,13 +100,11 @@ jobs:
           }
 
           $desktop = [Environment]::GetFolderPath('Desktop')
-          $lnk = @('智囊.lnk', 'Braintrust.lnk') |
-            ForEach-Object { Join-Path $desktop $_ } |
-            Where-Object { Test-Path -LiteralPath $_ } |
-            Select-Object -First 1
-          if (-not $lnk) { throw 'Desktop shortcut missing (neither 智囊.lnk nor Braintrust.lnk)' }
+          # 不在这里写中文字面量：workflow 生成的临时 .ps1 可能按 ANSI 读取，中文会变 mojibake。
+          $lnk = Get-ChildItem -LiteralPath $desktop -Filter '*.lnk' -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $lnk) { throw 'Desktop shortcut missing' }
           $shell = New-Object -ComObject WScript.Shell
-          $shortcut = $shell.CreateShortcut($lnk)
+          $shortcut = $shell.CreateShortcut($lnk.FullName)
           if ($shortcut.TargetPath -notlike '*powershell.exe') { throw "unexpected shortcut target: $($shortcut.TargetPath)" }
           if ($shortcut.IconLocation -notlike '*AppIcon.ico*') { throw "unexpected icon: $($shortcut.IconLocation)" }
 
