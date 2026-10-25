@@ -111,3 +111,34 @@ jobs:
           if ($shortcut.IconLocation -notlike '*AppIcon.ico*') { throw "unexpected icon: $($shortcut.IconLocation)" }
 
           & (Join-Path $env:GITHUB_WORKSPACE 'scripts\local-service-windows-smoke.ps1') -ServiceRoot $root
+
+      - name: Launcher and headless browser smoke
+        shell: powershell
+        run: |
+          $root = Join-Path $env:LOCALAPPDATA 'Braintrust\service'
+          $candidates = @(
+            (Join-Path ${env:ProgramFiles(x86)} 'Microsoft\Edge\Application\msedge.exe'),
+            (Join-Path $env:ProgramFiles 'Microsoft\Edge\Application\msedge.exe'),
+            (Join-Path $env:LOCALAPPDATA 'Microsoft\Edge\Application\msedge.exe')
+          )
+          $edge = $candidates | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -First 1
+          if (-not $edge) { throw 'Microsoft Edge not found on runner' }
+          $env:BRAINTRUST_BROWSER_PATH = $edge
+          $env:BRAINTRUST_BROWSER_HEADLESS = '1'
+          $env:BRAINTRUST_NO_DIALOG = '1'
+          Write-Host "browser=$edge"
+          & (Join-Path $root 'launcher.ps1')
+          $serviceJson = Join-Path $env:LOCALAPPDATA 'Braintrust\data\service.json'
+          for ($i = 0; $i -lt 100 -and -not (Test-Path -LiteralPath $serviceJson); $i++) { Start-Sleep -Milliseconds 200 }
+          if (-not (Test-Path -LiteralPath $serviceJson)) { throw 'service.json missing after launcher' }
+          $info = Get-Content -LiteralPath $serviceJson -Raw -Encoding UTF8 | ConvertFrom-Json
+          try {
+            $headers = @{ Authorization = "Bearer $($info.token)" }
+            $health = Invoke-RestMethod -Uri "http://127.0.0.1:$($info.port)/api/health" -Headers $headers -TimeoutSec 10
+            if (-not $health.browser.running) { throw 'browser is not running' }
+            if ([string]$health.browser.version.Browser -notlike 'Edg/*') { throw "unexpected browser: $($health.browser.version.Browser)" }
+            Write-Host "✅ Windows launcher + headless Edge + CDP OK: $($health.browser.version.Browser)"
+            Invoke-RestMethod -Uri "http://127.0.0.1:$($info.port)/api/quit" -Method Post -Headers $headers -ContentType 'application/json' -Body '{}' -TimeoutSec 10 | Out-Null
+          } finally {
+            if ($info.pid) { Stop-Process -Id $info.pid -Force -ErrorAction SilentlyContinue }
+          }

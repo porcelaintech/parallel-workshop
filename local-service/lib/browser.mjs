@@ -26,7 +26,9 @@ export class BrowserManager {
     this.port = await freePort();
     const profile = join(this.dataDir, 'browser-profile');
     mkdirSync(profile, { recursive: true });
+    const headless = process.env.BRAINTRUST_BROWSER_HEADLESS === '1' ? ['--headless=new', '--disable-gpu', '--no-sandbox'] : [];
     const args = [
+      ...headless,
       `--user-data-dir=${profile}`, '--profile-directory=Default',
       `--remote-debugging-port=${this.port}`, '--no-first-run', '--no-default-browser-check',
       '--disable-background-networking', '--disable-features=Translate', `--app=${this.serviceURL}`
