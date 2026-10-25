@@ -100,11 +100,14 @@ jobs:
           }
 
           $desktop = [Environment]::GetFolderPath('Desktop')
-          # 不在这里写中文字面量：workflow 生成的临时 .ps1 可能按 ANSI 读取，中文会变 mojibake。
-          $lnk = Get-ChildItem -LiteralPath $desktop -Filter '*.lnk' -ErrorAction SilentlyContinue | Select-Object -First 1
-          if (-not $lnk) { throw 'Desktop shortcut missing' }
+          # 不依赖中文文件名：按 Arguments 里的 Braintrust\service\launcher.ps1 认出我们的快捷方式。
           $shell = New-Object -ComObject WScript.Shell
-          $shortcut = $shell.CreateShortcut($lnk.FullName)
+          $shortcut = $null
+          foreach ($file in @(Get-ChildItem -LiteralPath $desktop -Filter '*.lnk' -ErrorAction SilentlyContinue)) {
+            $candidate = $shell.CreateShortcut($file.FullName)
+            if ($candidate.Arguments -like '*Braintrust*launcher.ps1*') { $shortcut = $candidate; break }
+          }
+          if (-not $shortcut) { throw 'Installer shortcut not found on Desktop' }
           if ($shortcut.TargetPath -notlike '*powershell.exe') { throw "unexpected shortcut target: $($shortcut.TargetPath)" }
           if ($shortcut.IconLocation -notlike '*AppIcon.ico*') { throw "unexpected icon: $($shortcut.IconLocation)" }
 
