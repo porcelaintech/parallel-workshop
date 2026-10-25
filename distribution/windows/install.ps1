@@ -66,26 +66,25 @@ try {
   $dirs = @([Environment]::GetFolderPath('Desktop'), [Environment]::GetFolderPath('Programs')) | Where-Object { $_ }
   foreach ($dir in $dirs) {
     New-Item -ItemType Directory -Path $dir -Force | Out-Null
-    $ascii = Join-Path $dir 'Braintrust.lnk'
-    try {
-      $shortcut = $shell.CreateShortcut($ascii)
-      $shortcut.TargetPath = $powershell
-      $shortcut.Arguments = $shortcutArgs
-      $shortcut.WorkingDirectory = $InstallRoot
-      $shortcut.IconLocation = (Join-Path $icons 'AppIcon.ico') + ',0'
-      $shortcut.Description = '智囊 · Braintrust 本地工作台'
-      $shortcut.Save()
-    } catch {
-      throw "无法在 $dir 创建快捷方式：$($_.Exception.Message)"
+    $saved = $false
+    # 中文 Windows 优先「智囊.lnk」；部分非中文系统上 WScript.Shell 无法直接保存中文路径，
+    # 此时降级为 Braintrust.lnk，确保图标一定可用。
+    foreach ($name in @('智囊.lnk', 'Braintrust.lnk')) {
+      try {
+        $shortcut = $shell.CreateShortcut((Join-Path $dir $name))
+        $shortcut.TargetPath = $powershell
+        $shortcut.Arguments = $shortcutArgs
+        $shortcut.WorkingDirectory = $InstallRoot
+        $shortcut.IconLocation = (Join-Path $icons 'AppIcon.ico') + ',0'
+        $shortcut.Description = '智囊 · Braintrust 本地工作台'
+        $shortcut.Save()
+        $saved = $true
+        break
+      } catch {
+        Write-Warning "快捷方式 $name 创建失败：$($_.Exception.Message)"
+      }
     }
-    # WScript.Shell 在部分非中文系统上无法直接用中文路径保存 .lnk；
-    # 先用 ASCII 名保存，再用 .NET 文件 API 改名，尽量保留「智囊」。
-    try {
-      Rename-Item -LiteralPath $ascii -NewName '智囊.lnk' -Force -ErrorAction Stop
-      Write-Host "    快捷方式：$dir\智囊.lnk"
-    } catch {
-      Write-Warning "中文快捷方式改名失败，保留 Braintrust.lnk：$($_.Exception.Message)"
-    }
+    if (-not $saved) { throw "无法在 $dir 创建「智囊」快捷方式" }
   }
 
   if ($NoLaunch) {
