@@ -34,6 +34,7 @@ mkdir -p "$MAC_DIR/assets"
 cp distribution/assets/AppIcon.icns "$MAC_DIR/assets/AppIcon.icns"
 chmod +x "$MAC_DIR/install.command" "$MAC_DIR/launcher.sh"
 (cd "$OUT/stage/macos" && zip -qr "$OUT/artifacts/Braintrust-local-service-macos-$VERSION.zip" "Braintrust-local-service-macos-$VERSION")
+bash distribution/macos/build-dmg.sh "$MAC_DIR" "$OUT/artifacts/Braintrust-$VERSION.dmg" "$VERSION"
 
 echo "==> 3/5 组装 Windows 发行包（install.bat + launcher.ps1 + 图标）"
 WIN_DIR="$OUT/stage/windows/Braintrust-local-service-windows-$VERSION"
@@ -44,9 +45,9 @@ cp distribution/assets/AppIcon.ico "$WIN_DIR/assets/AppIcon.ico"
 (cd "$OUT/stage/windows" && zip -qr "$OUT/artifacts/Braintrust-local-service-windows-$VERSION.zip" "Braintrust-local-service-windows-$VERSION")
 
 echo "==> 4/5 生成 SHA256SUMS（标准格式）"
-(cd "$OUT/artifacts" && shasum -a 256 *.zip > SHA256SUMS)
+(cd "$OUT/artifacts" && shasum -a 256 *.zip *.dmg > SHA256SUMS)
 
-MAC_SHA="$(awk '$2 ~ /macos/ {print $1}' "$OUT/artifacts/SHA256SUMS")"
+MAC_SHA="$(awk '$2 ~ /\.dmg$/ {print $1}' "$OUT/artifacts/SHA256SUMS")"
 WIN_SHA="$(awk '$2 ~ /windows/ {print $1}' "$OUT/artifacts/SHA256SUMS")"
 PREFIX="https://github.com/$REPO/releases/download/v$VERSION"
 PUBLISHED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -60,7 +61,7 @@ manifest = {
     "publishedAt": published_at,
     "notes": f"智囊本地服务工作台 v{version}",
     "artifacts": {
-        "darwin-universal": {"url": f"{prefix}/Braintrust-local-service-macos-{version}.zip", "sha256": mac_sha},
+        "darwin-universal": {"url": f"{prefix}/Braintrust-{version}.dmg", "sha256": mac_sha},
         "win32-x64": {"url": f"{prefix}/Braintrust-local-service-windows-{version}.zip", "sha256": win_sha},
     },
 }
@@ -72,7 +73,8 @@ cat > "$OUT/artifacts/RELEASE_NOTES.md" <<NOTES
 
 这是本地服务工作台的安装包。安装后桌面/开始菜单会出现「智囊」图标，双击即可使用；不需要浏览器扩展，也不需要 Apple 公证或 Windows 代码签名证书。
 
-- macOS：解压后双击 \`install.command\`；如遇 Gatekeeper，右键 → 打开。
+- macOS（推荐）：打开 `Braintrust-$VERSION.dmg`，把「智囊」拖到 Applications；首次打开如遇 Gatekeeper，右键 → 打开。
+- macOS（备用）：解压 zip 后双击 `install.command`。
 - Windows：解压后双击 \`install.bat\`；如遇 SmartScreen，更多信息 → 仍要运行。
 - 安装包内置 Node 22 运行时；浏览器使用系统 Microsoft Edge / Google Chrome / Chromium。
 - 登录态与本地数据保存在用户目录，不上传到我们的服务器。
@@ -86,6 +88,6 @@ echo "✅ 发布产物：$OUT/artifacts"
 ls -lh "$OUT/artifacts"
 echo ""
 echo "下一步："
-echo "  1. 审阅 zip 与 RELEASE_NOTES.md"
+echo "  1. 审阅 DMG/zip 与 RELEASE_NOTES.md"
 echo "  2. 创建 Draft Release 并上传 $OUT/artifacts/*"
 echo "  3. 把 local-service-update.json 部署到 https://braintrust.chat/updates/local-service-update.json"
