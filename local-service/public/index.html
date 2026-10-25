@@ -1,25 +1,56 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>智囊 · Braintrust</title>
-  <link rel="stylesheet" href="/style.css">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>智囊 · Braintrust</title>
+<link rel="stylesheet" href="workbench.css">
 </head>
 <body>
-  <header class="topbar">
-    <div><span class="eyebrow">BRAINTRUST</span><h1>智囊</h1><p>一次提问，多位 AI 一起思考。</p></div>
-    <div class="status"><span id="status-dot"></span><span id="status-text">正在连接本地服务…</span><span id="version"></span><button id="quit" class="quit" type="button">退出</button></div>
-  </header>
-  <main>
-    <section class="composer">
-      <textarea id="question" rows="4" placeholder="输入问题，发送给已选平台"></textarea>
-      <div class="composer-actions"><div><div id="platforms" class="platforms"></div><label class="file-picker">添加附件 <input id="attachments" type="file" multiple></label></div><button id="send" class="primary">发送</button></div>
-    </section>
-    <section><div class="section-title"><h2>平台窗口</h2><button id="open-all" class="secondary">打开已选平台</button></div><div id="cards" class="cards"></div></section>
-    <section class="updates"><div><strong id="update-title">版本</strong><span id="update-text">正在读取本地状态…</span></div><button id="check-update" class="secondary">检查更新</button></section>
-    <pre id="log" class="log" aria-live="polite"></pre>
-  </main>
-  <script src="/config.js"></script><script src="/app.js"></script>
+<div id="startup-overlay" role="status" aria-live="polite">
+  <div class="startup-card">
+    <div class="startup-copy">
+      <strong>智囊</strong>
+      <span id="startup-text">正在启动工作台…</span>
+    </div>
+    <div class="startup-track"><div class="startup-bar"></div></div>
+  </div>
+</div>
+<div id="topbar">
+  <span id="title">
+    <span class="brand-copy">
+      <strong>智囊</strong>
+      <small>Braintrust</small>
+    </span>
+  </span>
+  <textarea id="question" placeholder="输入问题（Enter 换行，Ctrl↩ 或点「发送」同步到所有勾选的模型）"></textarea>
+  <button id="mic" title="语音输入（再次点击结束）">🎤</button>
+  <button id="send" disabled>发送</button>
+</div>
+<div id="attachbar">
+  <input type="file" id="file-input" multiple style="display:none">
+  <button id="attach-btn" title="添加文件/图片">📎&nbsp; 附件</button>
+  <div id="attach-chips"></div>
+  <span id="attach-hint">可拖入文件/图片，或 Ctrl+V 粘贴图片</span>
+</div>
+<div id="controls">
+  <div id="platform-controls">
+    <div id="checks"></div>
+    <div id="paging" style="display:none">
+      <button id="page-left" title="上一页窗格">◀</button>
+      <span id="page-ind"></span>
+      <button id="page-right" title="下一页窗格">▶</button>
+    </div>
+    <span id="progress"></span>
+  </div>
+  <div id="update-banner" role="group" aria-label="软件更新" data-state="idle">
+    <span id="update-version" title="当前版本"></span>
+    <button id="update-btn" type="button">检查更新 / Check updates</button>
+    <span id="update-status" role="status" aria-live="polite"></span>
+  </div>
+</div>
+<div id="panes"></div>
+<script src="/config.js"></script>
+<script src="workbench-local.js"></script>
 </body>
 </html>

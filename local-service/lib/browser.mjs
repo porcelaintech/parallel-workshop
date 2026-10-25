@@ -3,6 +3,7 @@ import { spawn } from 'node:child_process';
 import { homedir, platform } from 'node:os';
 import { join } from 'node:path';
 import { SERVICE_ROOT } from './paths.mjs';
+import { FrameBridge } from './frame-bridge.mjs';
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -15,6 +16,7 @@ export class BrowserManager {
     this.port = null;
     this.child = null;
     this.browserPath = null;
+    this.frameBridge = null;
   }
 
   get running() { return Boolean(this.child && this.child.exitCode === null); }
@@ -49,10 +51,21 @@ export class BrowserManager {
   }
 
   async stop() {
+    try { await this.frameBridge?.stop(); } catch {}
+    this.frameBridge = null;
     if (!this.child) return;
     try { this.child.kill(); } catch {}
     this.child = null;
     this.port = null;
+  }
+
+  async prepareWorkbench() {
+    await this.ensureRunning();
+    if (!this.frameBridge) {
+      this.frameBridge = new FrameBridge({ browserPort: this.port, pageURL: this.serviceURL, log: this.log });
+    }
+    await this.frameBridge.start();
+    return { ok: true, browserPort: this.port };
   }
 
   async status() {
@@ -95,7 +108,8 @@ export class BrowserManager {
   async send(adapter, text, attachments = []) {
     await this.ensureRunning();
     const targets = await this.listTargets();
-    const target = targets.find(item => item.type === 'page' && hostMatches(item.url, adapter));
+    const matches = targets.filter(item => (item.type === 'page' || item.type === 'iframe') && hostMatches(item.url, adapter));
+    const target = matches.find(item => item.type === 'iframe') || matches[0];
     if (!target?.webSocketDebuggerUrl) throw new Error(`${adapter.name} 尚未打开，请先打开平台页面`);
     const expression = buildInjection(adapter, text, attachments);
     return await evaluate(target.webSocketDebuggerUrl, expression);
@@ -104,7 +118,8 @@ export class BrowserManager {
   async probe(adapter) {
     await this.ensureRunning();
     const targets = await this.listTargets();
-    const target = targets.find(item => item.type === 'page' && hostMatches(item.url, adapter));
+    const matches = targets.filter(item => (item.type === 'page' || item.type === 'iframe') && hostMatches(item.url, adapter));
+    const target = matches.find(item => item.type === 'iframe') || matches[0];
     if (!target?.webSocketDebuggerUrl) return { ok: false, state: 'not-open', url: null };
     const expression = buildProbe(adapter);
     const result = await evaluate(target.webSocketDebuggerUrl, expression);

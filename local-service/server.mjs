@@ -120,6 +120,9 @@ async function handler(request, response) {
         return;
       }
       if (url.pathname === '/api/browser/start' && request.method === 'POST') return sendJSON(response, 200, await browser.ensureRunning());
+      if (url.pathname === '/api/browser/prepare' && request.method === 'POST') {
+        return sendJSON(response, 200, await browser.prepareWorkbench());
+      }
       if (url.pathname === '/api/browser/open' && request.method === 'POST') {
         const status = await browser.ensureRunning();
         const target = await browser.focusWorkbench();
