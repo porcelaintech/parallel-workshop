@@ -17,8 +17,8 @@ website/
 安装包托管在阿里云 OSS 香港桶（公开读，HTTPS）：
 
 ```text
-https://braintrust-downloads-1738978343093082.oss-cn-hongkong.aliyuncs.com/downloads/Braintrust-local-service-macos-0.6.0.zip
-https://braintrust-downloads-1738978343093082.oss-cn-hongkong.aliyuncs.com/downloads/Braintrust-local-service-windows-0.6.0.zip
+https://braintrust-downloads-1738978343093082.oss-accelerate.aliyuncs.com/downloads/Braintrust-local-service-macos-0.6.0.zip
+https://braintrust-downloads-1738978343093082.oss-accelerate.aliyuncs.com/downloads/Braintrust-local-service-windows-0.6.0.zip
 ```
 
 GitHub Release 仍保留同一份资产作为备份/溯源。
