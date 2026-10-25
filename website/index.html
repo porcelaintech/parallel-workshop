@@ -3,303 +3,31 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>智囊 · Braintrust — 一次提问，多位 AI 一起思考</title>
-  <meta name="description" content="智囊把 ChatGPT、DeepSeek、豆包、Kimi、通义千问、文心一言放进同一个本地工作台。一次输入，回答并排出现。无需浏览器扩展，登录态和附件留在本机。">
-  <meta name="theme-color" content="#f7f5f0">
+  <title>Braintrust｜智囊</title>
+  <meta name="description" content="一次提问，多位 AI 一起思考。">
+  <meta name="theme-color" content="#f4f4f6">
   <link rel="canonical" href="https://braintrust.chat/">
   <link rel="icon" href="assets/mark.svg" type="image/svg+xml">
   <link rel="stylesheet" href="styles.css">
   <meta property="og:type" content="website">
-  <meta property="og:title" content="智囊 · Braintrust">
-  <meta property="og:description" content="一次提问，多位 AI 一起思考。本地运行，无需扩展，数据留在本机。">
+  <meta property="og:title" content="Braintrust｜智囊">
+  <meta property="og:description" content="一次提问，多位 AI 一起思考。">
   <meta property="og:url" content="https://braintrust.chat/">
-  <meta property="og:image" content="https://braintrust.chat/assets/mark.svg">
 </head>
 <body>
-  <header class="site-header">
-    <div class="wrap nav">
-      <a class="brand" href="./" aria-label="智囊首页">
-        <img src="assets/mark.svg" alt="">
-        <span>智囊<small>BRAINTRUST</small></span>
-      </a>
-      <button class="nav-toggle" type="button" aria-label="打开导航" aria-expanded="false">☰</button>
-      <nav class="nav-links" aria-label="主导航">
-        <a href="#download">下载</a>
-        <a href="#how">怎么用</a>
-        <a href="#faq">常见问题</a>
-        <a href="docs/">文档</a>
-        <a class="nav-cta" href="#download">获取智囊</a>
+  <main class="stage">
+    <section class="card" aria-label="Braintrust 智囊">
+      <div class="brand">
+        <img class="mark" src="assets/mark.svg" alt="" width="46" height="46">
+        <h1>Braintrust<span class="bar">｜</span><span class="cn">智囊</span></h1>
+      </div>
+      <p class="tagline">一次提问，多位 AI 一起思考。</p>
+      <nav class="downloads" aria-label="下载">
+        <a href="download/macos/">下载 macOS<span class="arrow" aria-hidden="true">↓</span></a>
+        <a href="download/windows/">下载 Windows<span class="arrow" aria-hidden="true">↓</span></a>
       </nav>
-    </div>
-  </header>
-
-  <main>
-    <section class="hero">
-      <div class="wrap hero-grid">
-        <div>
-          <span class="eyebrow">LOCAL AI WORKBENCH</span>
-          <h1>一次提问，<br>多位 AI <span class="accent">一起思考</span>。</h1>
-          <p class="lede">智囊把 ChatGPT、DeepSeek、豆包、Kimi、通义千问、文心一言放进同一个工作台。你只输入一次，回答并排出现——不用在六个标签页之间来回切换。</p>
-          <div class="actions">
-            <a class="button button-primary" id="download-macos" aria-disabled="true">准备中</a>
-            <a class="button button-ghost" id="download-windows" aria-disabled="true">准备中</a>
-            <a class="button button-ghost" href="docs/#install">安装说明</a>
-          </div>
-          <p class="hero-note">macOS 13+ / Windows 10、11 · 安装后桌面出现「智囊」图标 · 无需浏览器扩展</p>
-          <div class="hero-badges">
-            <span class="badge"><span class="dot"></span>智囊不建账号</span>
-            <span class="badge"><span class="dot"></span>登录态留在本机</span>
-            <span class="badge"><span class="dot"></span>提问与附件不上传给我们</span>
-          </div>
-        </div>
-
-        <div class="mock-wrap">
-          <div class="mock" aria-hidden="true">
-            <div class="mock-top">
-              <span class="traffic"><i></i><i></i><i></i></span>
-              <span class="mock-title"><img src="assets/mark.svg" alt="">智囊 <span>BRAINTRUST</span></span>
-            </div>
-            <div class="mock-body">
-              <div class="mock-composer">
-                <span class="q">帮我把这个问题同时问六个模型：如何设计一个本地优先的 AI 工作台？</span>
-                <span class="mock-send">发送</span>
-              </div>
-              <div class="mock-chips">
-                <span class="mock-chip on">ChatGPT</span>
-                <span class="mock-chip on">DeepSeek</span>
-                <span class="mock-chip on">豆包</span>
-                <span class="mock-chip on">Kimi</span>
-                <span class="mock-chip on">通义千问</span>
-                <span class="mock-chip on">文心一言</span>
-              </div>
-              <div class="mock-panes">
-                <article class="mock-pane">
-                  <div class="mock-pane-head"><b>ChatGPT</b><span class="status"></span></div>
-                  <div class="mock-pane-body">
-                    <div class="mock-answer">本地优先的关键是把数据边界放在用户设备上，而不是把“本地”当成一个营销词。</div>
-                    <div class="mock-answer">工作台应该只负责编排，回答留在各平台原生界面里。</div>
-                    <div class="mock-lines"><i></i><i></i><i></i></div>
-                  </div>
-                </article>
-                <article class="mock-pane">
-                  <div class="mock-pane-head"><b>DeepSeek</b><span class="status"></span></div>
-                  <div class="mock-pane-body">
-                    <div class="mock-answer">我会先拆成三层：本地运行时、平台连接层、界面编排层。任何一层都不应该默认上传用户数据。</div>
-                    <div class="mock-answer">登录态放在独立 Profile，附件只进入用户勾选的平台。</div>
-                    <div class="mock-lines"><i></i><i></i><i></i></div>
-                  </div>
-                </article>
-                <article class="mock-pane">
-                  <div class="mock-pane-head"><b>豆包</b><span class="status"></span></div>
-                  <div class="mock-pane-body">
-                    <div class="mock-answer">如果用户会在多个模型之间比较答案，界面就应该让答案并排出现，而不是让用户自己复制粘贴。</div>
-                    <div class="mock-answer">本地桌面图标 + 独立窗口，比让用户找扩展图标更可靠。</div>
-                    <div class="mock-lines"><i></i><i></i><i></i></div>
-                  </div>
-                </article>
-              </div>
-            </div>
-          </div>
-          <p class="mock-caption">界面示意 · 实际界面以发布版为准</p>
-        </div>
-      </div>
-    </section>
-
-    <section class="download-band" id="download">
-      <div class="wrap">
-        <div class="section-head">
-          <div>
-            <span class="kicker">DOWNLOAD</span>
-            <h2>下载智囊</h2>
-          </div>
-          <p>安装后桌面会出现「智囊」图标。登录态、提问和附件默认只留在本机；智囊不运营账号系统，也不代理你的对话。</p>
-        </div>
-        <div class="download-grid">
-          <article class="download-card">
-            <div class="download-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M16.7 12.9c0-2.2 1.8-3.3 1.9-3.4-1-1.5-2.6-1.7-3.2-1.7-1.4-.1-2.7.8-3.4.8-.7 0-1.8-.8-3-.8-1.5 0-2.9.9-3.7 2.2-1.6 2.7-.4 6.7 1.1 8.9.7 1.1 1.6 2.3 2.7 2.2 1.1 0 1.5-.7 2.9-.7 1.3 0 1.7.7 2.9.7 1.2 0 1.9-1.1 2.6-2.2.8-1.2 1.2-2.4 1.2-2.5-.1 0-2.8-1.1-2.8-4.3zM14.5 6.3c.6-.7 1-1.7.9-2.7-.9.1-2 .6-2.6 1.3-.6.7-1.1 1.7-.9 2.7 1 .1 2-.5 2.6-1.3z"/></svg>
-            </div>
-            <div>
-              <h3>macOS</h3>
-              <p>macOS 13 Ventura 或更高 · Apple 芯片与 Intel</p>
-              <p class="meta">安装器会生成 智囊.app 与桌面图标</p>
-              <div class="download-status preparing" id="state-macos"><span class="dot"></span>0.6.0 正在准备中</div>
-              <div class="meta" id="file-macos"></div>
-              <div class="meta" id="sha-macos"></div>
-              <div class="download-actions">
-                <a class="button button-primary" id="download-macos-card" aria-disabled="true">下载 macOS 版</a>
-                <a class="button button-ghost" href="docs/#macos">安装说明</a>
-              </div>
-            </div>
-          </article>
-          <article class="download-card">
-            <div class="download-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 5.5 10.3 4.5v7H3V5.5zm8.6-1.2L21 3v8.5h-9.4V4.3zM3 12.8h7.3v7L3 18.8v-6zm8.6 0H21V21l-9.4-1.3v-6.9z"/></svg>
-            </div>
-            <div>
-              <h3>Windows</h3>
-              <p>Windows 10 / 11 · 64 位</p>
-              <p class="meta">安装器会创建 智囊 桌面和开始菜单图标</p>
-              <div class="download-status preparing" id="state-windows"><span class="dot"></span>0.6.0 正在准备中</div>
-              <div class="meta" id="file-windows"></div>
-              <div class="meta" id="sha-windows"></div>
-              <div class="download-actions">
-                <a class="button button-primary" id="download-windows-card" aria-disabled="true">下载 Windows 版</a>
-                <a class="button button-ghost" href="docs/#windows">安装说明</a>
-              </div>
-            </div>
-          </article>
-        </div>
-        <p class="hero-note" style="margin-top:14px">macOS 与 Windows 使用独立安装包、独立文件名和独立 SHA-256；请按系统选择，不要混用。两个下载入口分别是 <code>/download/macos</code> 和 <code>/download/windows</code>。</p>
-        <div class="release-note" id="release-note"></div>
-      </div>
-    </section>
-
-    <section class="section" id="why">
-      <div class="wrap">
-        <div class="section-head">
-          <div>
-            <span class="kicker">WHY LOCAL</span>
-            <h2>为什么是本地应用</h2>
-          </div>
-          <p>不是把网页塞进另一个网页，也不是再做一个需要用户去找图标的浏览器扩展。智囊是一个有桌面入口的本地应用。</p>
-        </div>
-        <div class="feature-grid">
-          <article class="feature">
-            <span class="num">01</span>
-            <h3>桌面图标，不藏在扩展栏</h3>
-            <p>安装后桌面、开始菜单或 Applications 里有「智囊」。点一下打开；再点一下回到已有窗口，不需要记住端口，也不需要去浏览器扩展菜单里找。</p>
-          </article>
-          <article class="feature">
-            <span class="num">02</span>
-            <h3>一次输入，六端并排</h3>
-            <p>勾选要参与的平台，输入一次问题，统一发送。每个平台保留自己的原生界面、登录态和回答，不需要复制粘贴。</p>
-          </article>
-          <article class="feature">
-            <span class="num">03</span>
-            <h3>数据边界在你这台电脑</h3>
-            <p>智囊没有账号系统，不经过我们的服务器。登录态保存在独立浏览器 Profile；提问和附件只发给你勾选的 AI 平台。</p>
-          </article>
-        </div>
-      </div>
-    </section>
-
-    <section class="section" id="how">
-      <div class="wrap">
-        <div class="section-head">
-          <div>
-            <span class="kicker">HOW IT WORKS</span>
-            <h2>三步开始</h2>
-          </div>
-          <p>第一次安装需要解压并运行安装器；之后每天只需要点桌面图标。</p>
-        </div>
-        <div class="steps">
-          <article class="step">
-            <h3>下载并安装</h3>
-            <p>macOS 双击 <code>install.command</code>；Windows 双击 <code>install.bat</code>。安装器会生成本地「智囊」图标，不需要 Apple 公证或 Windows 代码签名证书。</p>
-          </article>
-          <article class="step">
-            <h3>在窗格里登录平台</h3>
-            <p>打开智囊后，在对应平台的窗格内登录官方网页。登录态保存在智囊自己的浏览器 Profile，不读取你日常浏览器的 Cookie。</p>
-          </article>
-          <article class="step">
-            <h3>输入一次，统一发送</h3>
-            <p>勾选要参与的平台，输入问题，点发送。回答在各平台原生界面中并排展示；附件也只发送给你勾选的平台。</p>
-          </article>
-        </div>
-      </div>
-    </section>
-
-    <section class="section">
-      <div class="wrap">
-        <div class="privacy-strip">
-          <div>
-            <h2>你的登录态，不该成为我们的数据。</h2>
-            <p>智囊不建账号、不做会员、不代理对话。登录态和附件默认只在本机；更新检查只读取一份静态版本清单，不携带你的提问或 Cookie。</p>
-          </div>
-          <a href="privacy.html">读隐私说明 →</a>
-        </div>
-      </div>
-    </section>
-
-    <section class="section" id="faq">
-      <div class="wrap">
-        <div class="section-head">
-          <div>
-            <span class="kicker">FAQ</span>
-            <h2>常见问题</h2>
-          </div>
-          <p>没有 Apple 公证、也没有 Windows 代码签名，所以第一次安装会看到系统提示。下面说明怎么处理。</p>
-        </div>
-        <div class="faq">
-          <details>
-            <summary>macOS 提示“无法验证开发者”，怎么办？</summary>
-            <p>因为我们没有申请 Apple Developer 会员，也没有做公证。第一次双击 <code>install.command</code> 时，右键点击文件 → 选择“打开” → 在弹窗里再点“打开”。安装器会在本机生成 <code>智囊.app</code>，这个 App 是在你电脑上生成的，不会带下载隔离标记，之后正常双击即可。详见 <a href="docs/#macos">macOS 安装说明</a>。</p>
-          </details>
-          <details>
-            <summary>Windows 提示“Windows 已保护你的电脑”，怎么办？</summary>
-            <p>点“更多信息” → “仍要运行”。我们没有购买 Windows 代码签名证书，所以 SmartScreen 会提示。安装器只在你自己的用户目录写入文件并创建快捷方式，不需要管理员权限。详见 <a href="docs/#windows">Windows 安装说明</a>。</p>
-          </details>
-          <details>
-            <summary>需要安装浏览器吗？</summary>
-            <p>智囊使用 Edge、Chrome 或 Chromium 的内核来承载各平台官方网页。Windows 10/11 自带 Edge；macOS 如果没有 Chrome/Edge/Chromium，安装器会提示你先安装一个。我们不会读取你日常浏览器的登录态，智囊使用独立 Profile。</p>
-          </details>
-          <details>
-            <summary>智囊会把我的登录态或问题上传给你们吗？</summary>
-            <p>不会。智囊没有账号系统，也没有我们的中转服务器。登录态保存在本机独立浏览器 Profile；提问和附件只发送给你勾选的 AI 平台。更新检查只请求 <code>braintrust.chat</code> 上的一份静态版本清单。</p>
-          </details>
-          <details>
-            <summary>怎么更新？</summary>
-            <p>应用内会检查 <code>https://braintrust.chat/updates/local-service-update.json</code>，下载 GitHub Release 上的新安装包并校验 SHA-256。更新不会动你的登录态和本地附件。</p>
-          </details>
-          <details>
-            <summary>怎么卸载？</summary>
-            <p>macOS：把 <code>~/Applications/智囊.app</code> 拖到废纸篓，再删除 <code>~/Library/Application Support/Braintrust</code>。Windows：删除桌面/开始菜单快捷方式，再删除 <code>%LOCALAPPDATA%\Braintrust</code>。删除数据目录会同时删除登录态和本地附件。</p>
-          </details>
-        </div>
-      </div>
+      <a class="repo" href="https://github.com/porcelaintech/parallel-workshop" target="_blank" rel="noreferrer">GitHub<span class="arrow" aria-hidden="true">↗</span></a>
     </section>
   </main>
-
-  <footer class="site-footer">
-    <div class="wrap">
-      <div class="footer-grid">
-        <div class="footer-brand">
-          <a class="brand" href="./">
-            <img src="assets/mark.svg" alt="">
-            <span>智囊<small>BRAINTRUST</small></span>
-          </a>
-          <p>一次提问，多位 AI 一起思考。本地运行，无需浏览器扩展；登录态和附件留在你的电脑。</p>
-        </div>
-        <div class="footer-col">
-          <h4>产品</h4>
-          <a href="#download">下载</a>
-          <a href="docs/">安装与使用</a>
-          <a href="changelog.html">更新日志</a>
-          <a href="https://github.com/porcelaintech/parallel-workshop/releases" data-release-link>GitHub Releases</a>
-        </div>
-        <div class="footer-col">
-          <h4>资源</h4>
-          <a href="docs/#macos">macOS 安装</a>
-          <a href="docs/#windows">Windows 安装</a>
-          <a href="docs/#faq">故障排查</a>
-          <a href="privacy.html">隐私说明</a>
-        </div>
-        <div class="footer-col">
-          <h4>关于</h4>
-          <a href="https://github.com/porcelaintech/parallel-workshop">GitHub 仓库</a>
-          <a href="https://github.com/porcelaintech/parallel-workshop/issues">问题反馈</a>
-          <a href="docs/#data">数据与卸载</a>
-          <span style="display:block;margin-top:7px;color:var(--ink-muted);font-size:12px">braintrust.chat</span>
-        </div>
-      </div>
-      <div class="footer-bottom">
-        <span>© 2026 智囊 · Braintrust</span>
-        <span>本地运行 · 不建账号 · 无遥测 · 无需浏览器扩展</span>
-      </div>
-    </div>
-  </footer>
-
-  <script src="app.js"></script>
 </body>
 </html>

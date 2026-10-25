@@ -3,48 +3,37 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>下载 Windows 版 · 智囊 Braintrust</title>
-  <meta name="description" content="下载智囊 Windows 本地工作台安装包。Windows 10/11 64 位；无需代码签名证书，不需要浏览器扩展。">
-  <meta name="theme-color" content="#f7f5f0">
+  <title>下载 Windows · Braintrust｜智囊</title>
+  <meta name="theme-color" content="#f4f4f6">
   <link rel="canonical" href="https://braintrust.chat/download/windows/">
   <link rel="icon" href="../../assets/mark.svg" type="image/svg+xml">
   <link rel="stylesheet" href="../../styles.css">
 </head>
 <body>
-  <main class="page-hero">
-    <div class="wrap" style="max-width:760px;padding:64px 0 80px">
-      <span class="kicker">DOWNLOAD · WINDOWS</span>
-      <h1>下载 Windows 版</h1>
-      <p>Windows 10 / 11 · 64 位。安装后会在桌面和开始菜单创建带图标的「智囊」快捷方式；不需要管理员权限，也不需要 Windows 代码签名证书。</p>
-      <div class="callout" style="margin-top:22px">
-        <p><strong>下载状态：</strong><span id="status">正在读取版本信息…</span></p>
+  <main class="stage">
+    <section class="card download-card" aria-label="下载 Windows">
+      <div class="brand">
+        <a href="../../"><img class="mark" src="../../assets/mark.svg" alt="" width="46" height="46"><h1>Braintrust<span class="bar">｜</span><span class="cn">智囊</span></h1></a>
       </div>
-      <div class="actions" style="margin-top:22px">
-        <a class="button button-primary" href="../../#download">返回下载页</a>
-        <a class="button button-ghost" href="../../docs/#windows">Windows 安装说明</a>
-      </div>
-      <p class="hero-note" id="meta" style="margin-top:20px"></p>
-    </div>
+      <p class="tagline" id="status">正在准备下载…</p>
+      <a class="repo" id="fallback" href="https://github.com/porcelaintech/parallel-workshop/releases" target="_blank" rel="noreferrer">GitHub<span class="arrow" aria-hidden="true">↗</span></a>
+      <a class="back" href="../../">返回</a>
+    </section>
   </main>
   <script>
     (async () => {
       const status = document.getElementById('status');
-      const meta = document.getElementById('meta');
       try {
         const response = await fetch(`../../updates/local-service-update.json?t=${Date.now()}`, { cache: 'no-store' });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        if (!response.ok) throw new Error('not-ready');
         const manifest = await response.json();
         const artifact = manifest.artifacts?.['win32-x64'];
-        if (!artifact?.url) throw new Error('当前版本没有 Windows 安装包');
-        if (!/^https:\/\/github\.com\/porcelaintech\/parallel-workshop\/releases\//.test(artifact.url)) {
-          throw new Error('安装包地址不在受信任的 GitHub Release 域名下');
-        }
-        status.textContent = `v${manifest.version} · 正在跳转到 GitHub Release…`;
-        meta.textContent = `文件：${artifact.url.split('/').pop()} · SHA-256 ${artifact.sha256 || '未提供'}`;
+        if (!artifact?.url) throw new Error('not-ready');
+        if (!/^https:\/\/github\.com\/porcelaintech\/parallel-workshop\/releases\//.test(artifact.url)) throw new Error('bad-url');
+        status.textContent = '正在前往 GitHub…';
         window.location.replace(artifact.url);
-      } catch (error) {
-        status.textContent = '0.6.0 的 Windows 安装包正在准备中。';
-        meta.textContent = '安装包尚未发布；发布后这个独立链接会自动跳转到对应的 GitHub Release 资产。';
+      } catch {
+        status.textContent = '安装包尚未发布。';
       }
     })();
   </script>
