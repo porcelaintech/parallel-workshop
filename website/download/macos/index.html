@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>下载 macOS 版 · 智囊 Braintrust</title>
+  <meta name="description" content="下载智囊 macOS 本地工作台安装包。Apple 芯片与 Intel 通用；无需 Apple 公证，不需要浏览器扩展。">
+  <meta name="theme-color" content="#f7f5f0">
+  <link rel="canonical" href="https://braintrust.chat/download/macos/">
+  <link rel="icon" href="../../assets/mark.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../../styles.css">
+</head>
+<body>
+  <main class="page-hero">
+    <div class="wrap" style="max-width:760px;padding:64px 0 80px">
+      <span class="kicker">DOWNLOAD · MACOS</span>
+      <h1>下载 macOS 版</h1>
+      <p>macOS 13 Ventura 或更高 · Apple 芯片与 Intel 通用。安装后会在 <code>~/Applications</code> 生成「智囊.app」和桌面图标；不需要 Apple Developer 会员或公证。</p>
+      <div class="callout" style="margin-top:22px">
+        <p><strong>下载状态：</strong><span id="status">正在读取版本信息…</span></p>
+      </div>
+      <div class="actions" style="margin-top:22px">
+        <a class="button button-primary" href="../../#download">返回下载页</a>
+        <a class="button button-ghost" href="../../docs/#macos">macOS 安装说明</a>
+      </div>
+      <p class="hero-note" id="meta" style="margin-top:20px"></p>
+    </div>
+  </main>
+  <script>
+    (async () => {
+      const status = document.getElementById('status');
+      const meta = document.getElementById('meta');
+      try {
+        const response = await fetch(`../../updates/local-service-update.json?t=${Date.now()}`, { cache: 'no-store' });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const manifest = await response.json();
+        const artifact = manifest.artifacts?.['darwin-universal'];
+        if (!artifact?.url) throw new Error('当前版本没有 macOS 安装包');
+        if (!/^https:\/\/github\.com\/porcelaintech\/parallel-workshop\/releases\//.test(artifact.url)) {
+          throw new Error('安装包地址不在受信任的 GitHub Release 域名下');
+        }
+        status.textContent = `v${manifest.version} · 正在跳转到 GitHub Release…`;
+        meta.textContent = `文件：${artifact.url.split('/').pop()} · SHA-256 ${artifact.sha256 || '未提供'}`;
+        window.location.replace(artifact.url);
+      } catch (error) {
+        status.textContent = '0.6.0 的 macOS 安装包正在准备中。';
+        meta.textContent = '安装包尚未发布；发布后这个独立链接会自动跳转到对应的 GitHub Release 资产。';
+      }
+    })();
+  </script>
+</body>
+</html>

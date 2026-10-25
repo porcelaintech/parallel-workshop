@@ -1,0 +1,3 @@
+name = "braintrust-site"
+pages_build_output_dir = "."
+compatibility_date = "2026-10-01"

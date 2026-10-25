@@ -142,6 +142,17 @@ bash scripts/package-app.sh   # 生成 build/ParallelWorkbench.app（未签名�
 - **语音输入**：macOS 使用系统 `SFSpeechRecognizer`，Edge 使用 Web Speech API；是否完全在设备端处理取决于系统、语言与浏览器能力。点击 🎤 开始，实时转写进输入框，再点一次结束
 - 首次使用语音：macOS 需授权麦克风与语音识别（系统设置 → 隐私与安全性）
 
+## 本地工作台分发（Phase 0）
+
+`distribution/` 是本地工作台的独立分发外壳：macOS 和 Windows **两个独立安装包/下载入口**，不需要 Apple 公证或 Windows 代码签名，也不需要浏览器扩展。安装器在本机生成「智囊.app」或带图标的快捷方式；Node 22 运行时随包分发，浏览器使用系统 Edge/Chrome/Chromium。
+
+- 构建：`VERSION=0.6.0 bash distribution/scripts/build-release.sh`
+- 官网：`website/`（Cloudflare Pages / 自定义域名 `braintrust.chat`）
+- 更新索引：`https://braintrust.chat/updates/local-service-update.json`
+- 说明：`distribution/README.md`、`website/README.md`
+
+Phase 0 只交付分发外壳和安装器；设计版工作台的 iframe/CDP 移植与完整 UI 是 Phase 1，当前 `local-service/public` 仍是极简控制页，不能当正式产品发布。
+
 ## 版本更新
 
 - **双端入口与状态**：顶部固定显示 `Update` 和当前版本；启动、回到前台及每 6 小时自动检查。已是最新版时明确提示；网络超时或服务错误显示原因并支持重试。GitHub API 受限或暂时不可用时使用 Release 的 `update.json` 备用索引。

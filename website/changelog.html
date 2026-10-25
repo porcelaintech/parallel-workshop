@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>更新日志 · 智囊 Braintrust</title>
+  <meta name="description" content="智囊本地工作台的版本更新记录。">
+  <meta name="theme-color" content="#f7f5f0">
+  <link rel="canonical" href="https://braintrust.chat/changelog.html">
+  <link rel="icon" href="assets/mark.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap nav">
+      <a class="brand" href="./" aria-label="智囊首页">
+        <img src="assets/mark.svg" alt="">
+        <span>智囊<small>BRAINTRUST</small></span>
+      </a>
+      <button class="nav-toggle" type="button" aria-label="打开导航" aria-expanded="false">☰</button>
+      <nav class="nav-links" aria-label="主导航">
+        <a href="./#download">下载</a>
+        <a href="docs/">文档</a>
+        <a href="privacy.html">隐私</a>
+        <a class="nav-cta" href="./#download">获取智囊</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="page-hero">
+      <div class="wrap">
+        <span class="kicker">CHANGELOG</span>
+        <h1>更新日志</h1>
+        <p>本地工作台还在 0.6.0 的开发阶段。下面区分“已发布的内部版本”和“计划中的公开版本”，避免把未完成的功能写成已上线。</p>
+      </div>
+    </section>
+
+    <div class="wrap prose" style="max-width:820px;padding-bottom:70px">
+      <h2>0.6.0 — 公开版本（开发中）</h2>
+      <ul>
+        <li>设计版工作台：顶部统一输入、附件栏、平台勾选、1–3 个并行窗格、分页、缩放、状态角标。</li>
+        <li>桌面入口：安装后生成本地 <code>智囊.app</code> / Windows 快捷方式；再点图标找回已有窗口。</li>
+        <li>安装包内置 Node 22；浏览器使用系统 Edge / Chrome / Chromium，不需要下载 Node。</li>
+        <li>更新索引迁到 <code>braintrust.chat</code>，安装包从 GitHub Release 下载并校验 SHA-256。</li>
+        <li>不申请 Apple 公证、不申请 Windows 代码签名；安装器在本机生成应用，首次安装会看到一次系统提示。</li>
+      </ul>
+      <p><strong>状态：</strong>开发中。下载按钮会在 GitHub Release 发布并部署更新索引后自动开放。</p>
+
+      <h2>0.5.0 — 内部技术预览</h2>
+      <ul>
+        <li>本地 Node 服务、六个平台适配器、独立浏览器 Profile、CDP 探针/发送。</li>
+        <li>极简控制页（非设计版工作台），仅用于内部验证服务链路。</li>
+        <li>未公开下载。</li>
+      </ul>
+
+      <h2>更早</h2>
+      <p>原生 macOS 应用与 Edge 扩展的更新记录见 <a href="https://github.com/porcelaintech/parallel-workshop/releases">GitHub Releases</a>。</p>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap">
+      <div class="footer-bottom">
+        <span>© 2026 智囊 · Braintrust</span>
+        <span><a href="./">首页</a> · <a href="docs/">文档</a> · <a href="privacy.html">隐私</a> · <a href="https://github.com/porcelaintech/parallel-workshop">GitHub</a></span>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    (() => {
+      const header = document.querySelector('.site-header');
+      const onScroll = () => header?.classList.toggle('scrolled', window.scrollY > 8);
+      window.addEventListener('scroll', onScroll, { passive: true }); onScroll();
+      const toggle = document.querySelector('.nav-toggle');
+      const links = document.querySelector('.nav-links');
+      toggle?.addEventListener('click', () => {
+        const open = links.classList.toggle('open');
+        toggle.setAttribute('aria-expanded', String(open));
+      });
+      links?.querySelectorAll('a').forEach((a) => a.addEventListener('click', () => links.classList.remove('open')));
+    })();
+  </script>
+</body>
+</html>

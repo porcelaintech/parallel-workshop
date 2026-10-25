@@ -1,0 +1,5 @@
+/download /#download 302
+/download/macos /download/macos/ 301
+/download/windows /download/windows/ 301
+/release https://github.com/porcelaintech/parallel-workshop/releases 302
+/github https://github.com/porcelaintech/parallel-workshop 302

@@ -25,3 +25,10 @@ artifacts/
 
 # 扩展签名私钥（CRX 打包用，绝不入库）
 keys/
+
+# 本地分发验证
+distribution/spike/.profile-*/
+distribution/spike/*.json
+distribution/spike/*.out
+distribution/spike/*.err
+website/.wrangler/
