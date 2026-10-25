@@ -8,7 +8,9 @@ $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Windows.Forms | Out-Null
 
 function Show-Error([string]$Message) {
-  [System.Windows.Forms.MessageBox]::Show($Message, '智囊 · 安装失败', 'OK', 'Error') | Out-Null
+  [Console]::Error.WriteLine($Message)
+  if ($env:CI -eq 'true' -or $env:BRAINTRUST_NO_DIALOG -eq '1') { return }
+  try { [System.Windows.Forms.MessageBox]::Show($Message, '智囊 · 安装失败', 'OK', 'Error') | Out-Null } catch {}
 }
 
 function Test-TcpPort([int]$Port) {
