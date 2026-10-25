@@ -18,7 +18,11 @@ node server.mjs --no-browser --print-ready
 
 ## 安装入口
 
-- Windows：`launchers/windows/install.ps1`，完成后双击桌面或开始菜单的“智囊”。
-- macOS：`launchers/macos/install.sh`，完成后双击 `Applications/Braintrust.command` 或桌面入口。
+发行包根目录提供两个平台独立安装器：
+
+- Windows：双击 `install.bat`；完成后双击桌面或开始菜单的「智囊」。
+- macOS：双击 `install.command`；安装器会在本机生成 `~/Applications/智囊.app`，完成后双击它或桌面入口。
+
+`launchers/` 目录只保留给仓库内开发调试，不进入发行包。
 
 更新索引、更新包和 SHA-256 校验由本地服务处理；安装包可以从公开 GitHub Release 下载，不需要应用商店账户。

@@ -7,10 +7,9 @@ OUT="${OUT:-build/local-service}"
 rm -rf "$OUT"
 mkdir -p "$OUT/stage/local-service/data/adapters"
 
-cp -R local-service/config local-service/lib local-service/public local-service/launchers local-service/package.json local-service/server.mjs local-service/README.md "$OUT/stage/local-service/"
+cp -R local-service/config local-service/lib local-service/public local-service/package.json local-service/server.mjs local-service/README.md "$OUT/stage/local-service/"
 cp Sources/WorkbenchCore/Resources/adapters/*.json "$OUT/stage/local-service/data/adapters/"
 cp Sources/WorkbenchCore/Resources/injection/*.js "$OUT/stage/local-service/data/"
-chmod +x "$OUT/stage/local-service/launchers/macos/"*.sh
 mkdir -p "$OUT/stage/local-service/runtime"
 
 RUNTIME_CACHE="${BRAINTRUST_RUNTIME_CACHE:-build/local-service-runtime-cache}"

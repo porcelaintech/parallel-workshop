@@ -9,7 +9,7 @@ Release 提供两个压缩包：
 - `Braintrust-local-service-windows-x64.zip`
 - `Braintrust-local-service-macos-universal.zip`
 
-Windows 解压后运行 `local-service/launchers/windows/install.ps1`；macOS 解压后运行 `local-service/launchers/macos/install.sh`。安装器写入当前用户目录并创建“智囊”桌面/开始菜单入口，不需要管理员权限。正式轻量包不内置大型运行时，首次点击时在本地数据目录下载并校验 Node 22；macOS 没有可用浏览器时再按架构下载并校验 Chromium，因此安装包保持在 50MB 以下。
+Windows 解压后双击 `install.bat`；macOS 解压后双击 `install.command`。两个平台使用独立安装包、独立下载链接和独立 SHA-256。安装器写入当前用户目录并创建“智囊”桌面/开始菜单入口，不需要管理员权限。正式轻量包不内置大型运行时，首次点击时在本地数据目录下载并校验 Node 22；macOS 没有可用浏览器时再按架构下载并校验 Chromium，因此安装包保持在 50MB 以下。
 
 ## 运行模型
 
