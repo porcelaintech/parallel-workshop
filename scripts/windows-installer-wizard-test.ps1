@@ -105,7 +105,7 @@ try {
     $kind = ''
     foreach ($button in $buttons) {
       $name = ([string]$button.Current.Name).Replace('&', '').Trim()
-      if ($name -match '^(Finish|完成|Close|关闭)(?:\s|\(|（|$)' -and $sawForward -and (Test-Path -LiteralPath $server)) {
+      if ($name -match '^(Finish|完成)(?:\s|\(|（|$)' -and $sawForward -and (Test-Path -LiteralPath $server)) {
         $chosen = $button; $kind = 'finish'; break
       }
       if ($name -match '^(Next|下一步|Install|安装)(?:\s|\(|（|>|$)') {

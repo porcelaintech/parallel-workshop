@@ -62,6 +62,51 @@ function Wait-Until([scriptblock]$Test, [string]$Description, [int]$Seconds = 45
   throw "Timed out: $Description"
 }
 
+# Read MS-SHLLINK StringData directly. WScript.Shell getters on some Windows
+# hosts convert Unicode arguments/icon paths through the ANSI code page even
+# when the .lnk stores valid UTF-16LE and the Windows shell launches it correctly.
+function Read-ShellLinkStringData([string]$Path) {
+  $bytes = [IO.File]::ReadAllBytes($Path)
+  Require ($bytes.Length -ge 0x4c -and $bytes.Length -le 1048576) 'Invalid shortcut size'
+  Require ([BitConverter]::ToUInt32($bytes, 0) -eq 0x4c) 'Invalid Shell Link header'
+  $flags = [BitConverter]::ToUInt32($bytes, 0x14)
+  $offset = 0x4c
+  if (($flags -band 1) -ne 0) {
+    Require ($offset + 2 -le $bytes.Length) 'Truncated Shell Link IDList size'
+    $idListSize = [BitConverter]::ToUInt16($bytes, $offset)
+    $offset += 2 + $idListSize
+    Require ($offset -le $bytes.Length) 'Truncated Shell Link IDList'
+  }
+  if (($flags -band 2) -ne 0) {
+    Require ($offset + 4 -le $bytes.Length) 'Truncated Shell Link LinkInfo size'
+    $linkInfoSize = [BitConverter]::ToUInt32($bytes, $offset)
+    Require ($linkInfoSize -ge 4 -and $linkInfoSize -le ($bytes.Length - $offset)) 'Invalid Shell Link LinkInfo size'
+    $offset += $linkInfoSize
+  }
+  $unicode = ($flags -band 0x80) -ne 0
+  $encoding = if ($unicode) { [Text.Encoding]::Unicode } else { [Text.Encoding]::Default }
+  $width = if ($unicode) { 2 } else { 1 }
+  $strings = [ordered]@{ Flags = $flags; Unicode = $unicode; Name = ''; RelativePath = ''; WorkingDirectory = ''; Arguments = ''; IconLocation = '' }
+  $fields = @(
+    @{ Flag = 4; Name = 'Name' },
+    @{ Flag = 8; Name = 'RelativePath' },
+    @{ Flag = 16; Name = 'WorkingDirectory' },
+    @{ Flag = 32; Name = 'Arguments' },
+    @{ Flag = 64; Name = 'IconLocation' }
+  )
+  foreach ($field in $fields) {
+    if (($flags -band $field.Flag) -eq 0) { continue }
+    Require ($offset + 2 -le $bytes.Length) ('Truncated Shell Link string length: ' + $field.Name)
+    $characters = [BitConverter]::ToUInt16($bytes, $offset)
+    $offset += 2
+    $length = [int]$characters * $width
+    Require ($length -le ($bytes.Length - $offset)) ('Truncated Shell Link string: ' + $field.Name)
+    $strings[$field.Name] = $encoding.GetString($bytes, $offset, $length)
+    $offset += $length
+  }
+  return [pscustomobject]$strings
+}
+
 function Get-OwnedServers {
   $escaped = [regex]::Escape([IO.Path]::GetFullPath($serverPath))
   $argument = '(?i)(?:^|\s)(?:"' + $escaped + '"|' + $escaped + ')(?=\s|$)'
@@ -223,9 +268,27 @@ try {
   foreach ($path in @($desktopShortcut, $startShortcut)) {
     Require (Test-Path -LiteralPath $path) "Missing shortcut: $path"
     $shortcut = $shell.CreateShortcut($path)
+    $rawShortcut = Read-ShellLinkStringData $path
+    $expectedArguments = '"' + (Join-Path $serviceRoot 'launcher.vbs') + '"'
+    $expectedIcon = Join-Path $serviceRoot 'assets\AppIcon.ico'
+    $report.observations.Add([pscustomobject]@{
+      name = 'shortcut StringData and COM metadata comparison'
+      shortcut = $path
+      rawUnicode = $rawShortcut.Unicode
+      rawArguments = $rawShortcut.Arguments
+      comArguments = [string]$shortcut.Arguments
+      rawIcon = $rawShortcut.IconLocation
+      comIcon = [string]$shortcut.IconLocation
+      comArgumentsMatchRaw = ([string]$shortcut.Arguments -ceq $rawShortcut.Arguments)
+      metadataAuthority = 'MS-SHLLINK StringData; actual desktop shell launch is separately tested'
+    })
     Require ($shortcut.TargetPath -like '*\wscript.exe') 'Shortcut does not use no-console VBS entry'
-    Require ($shortcut.Arguments -eq ('"' + (Join-Path $serviceRoot 'launcher.vbs') + '"')) 'Shortcut has incorrect launcher arguments'
-    Require ($shortcut.IconLocation -like ('*' + (Join-Path $serviceRoot 'assets\AppIcon.ico') + '*')) 'Shortcut icon missing'
+    Require $rawShortcut.Unicode 'Shortcut does not store Unicode StringData'
+    Require ($rawShortcut.Arguments -ceq $expectedArguments) 'Shortcut has incorrect raw Unicode launcher arguments'
+    Require ($rawShortcut.IconLocation -ceq $expectedIcon) 'Shortcut has incorrect raw Unicode icon path'
+    Require (Test-Path -LiteralPath $rawShortcut.IconLocation) 'Shortcut icon file missing'
+    $evidenceName = if ($path -eq $desktopShortcut) { 'desktop-shortcut.lnk' } else { 'start-menu-shortcut.lnk' }
+    Copy-Item -LiteralPath $path -Destination (Join-Path $Evidence $evidenceName) -Force
   }
   $registry = Get-ItemProperty -LiteralPath $uninstallRegistry
   if ($ExpectedVersion) { Require ($registry.DisplayVersion -eq $ExpectedVersion) 'Uninstall registry version differs from expected candidate' }

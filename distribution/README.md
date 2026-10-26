@@ -50,7 +50,7 @@ GitHub Release：历史安装包备份
 
 ## 当前公网下载状态
 
-**2026-10-26 实测：`https://braintrust.chat/` 与官网所用 OSS Windows 安装包端点均返回 HTTP 403，响应含 `UserDisable` 和代码 `0003-00000801`。** 这是当前下载入口的阻断，不能报告“官网下载已通过”。该响应不足以确定具体计费、账户或配置原因，需由 OSS 侧状态进一步确认。
+**2026-10-26 早先官网与 OSS 安装包曾返回 HTTP 403 / `UserDisable`（`0003-00000801`）；用户充值后，本机复测官网与 Windows EXE 均已恢复 HTTP 200，EXE 哈希与历史记录一致。** Windows 浏览器点击下载流程单独复测，不以本机直链下载代替。充值前的错误证据保留原样。
 
 历史 GitHub 备份地址为：
 
@@ -63,7 +63,7 @@ GitHub Release：历史安装包备份
 
 ## 本轮 Windows 候选构建
 
-`distribution/scripts/build-windows-candidate.mjs` 用于从明确的干净源码提交构建测试候选，默认完整版本为 **`0.6.0-rc.2.B`**，保留 `0.6.0` 三段基数。它生成安装包和 `build-proof.json`，记录源码 commit、完整候选版本、Node 运行时来源校验值、安装包大小与 SHA-256。候选安装包必须小于 **50,000,000 字节**。
+`distribution/scripts/build-windows-candidate.mjs` 用于从明确的干净源码提交构建测试候选，默认完整版本为 **`0.6.0-rc.2.C`**，保留 `0.6.0` 三段基数。它生成安装包和 `build-proof.json`，记录源码 commit、完整候选版本、Node 运行时来源校验值、安装包大小与 SHA-256。候选安装包必须小于 **50,000,000 字节**。
 
 在源码改动已提交、工作树干净，且构建环境已备好 Node 22、NSIS 及解压工具后运行：
 
@@ -72,7 +72,7 @@ node distribution/scripts/build-windows-candidate.mjs
 
 # 输出目录
 # build/windows-acceptance/artifacts/
-#   Braintrust-Setup-0.6.0-rc.2.B.exe
+#   Braintrust-Setup-0.6.0-rc.2.C.exe
 #   build-proof.json
 ```
 
@@ -94,7 +94,7 @@ node distribution/scripts/build-windows-candidate.mjs
 
 ## 尚未完成的验证与优化
 
-- 恢复并复核官网与 OSS 下载入口，确认浏览器点击能完整下载且哈希匹配。
+- 官网与 OSS 已恢复；继续以 Windows 浏览器下载证据确认实际按钮、完整文件与哈希。
 - 执行本轮候选安装、图标启动、UI、应用重启、覆盖安装和卸载测试，逐项记录结果。
 - 六平台真实账号的登录、发送、回答与附件矩阵；当前历史证据主要是 probe，DeepSeek 登录页的 `NO_INPUT` 不能算发送成功。
 - 消费者 Windows 10/11 的首次安装、SmartScreen 与手动交互。
