@@ -2,7 +2,9 @@
 param(
   [Parameter(Mandatory = $true)][string]$Installer,
   [Parameter(Mandatory = $true)][string]$Evidence,
-  [string]$InstallDirectory = ''
+  [string]$InstallDirectory = '',
+  [ValidateRange(0, 2147483647)][int]$ExistingInstallerProcessId = 0,
+  [ValidateRange(20, 150)][int]$TimeoutSeconds = 150
 )
 
 Set-StrictMode -Version 2.0
@@ -25,6 +27,7 @@ $report = [ordered]@{
   limitations = @('This checks NSIS wizard buttons on a hosted Windows desktop, not SmartScreen reputation or physical consumer Windows.', 'No security dialog is accepted or bypassed. Installation auto-launch may open the product, but this helper sends no AI messages.')
 }
 $process = $null
+$ownsInstallerProcess = $false
 $exitCode = 1
 $script:screenshotNumber = 0
 
@@ -74,11 +77,20 @@ try {
     $exitCode = 2
     throw 'No interactive user desktop is available; the wizard was not tested'
   }
-  $arguments = if ($InstallDirectory) { '/D=' + $installRoot } else { '' }
-  if ($arguments) { $process = Start-Process -FilePath $Installer -ArgumentList $arguments -PassThru }
-  else { $process = Start-Process -FilePath $Installer -PassThru }
+  if ($ExistingInstallerProcessId -gt 0) {
+    $identity = Get-CimInstance Win32_Process -Filter ("ProcessId={0}" -f $ExistingInstallerProcessId) -ErrorAction Stop
+    if (-not $identity -or -not $identity.ExecutablePath -or -not [string]::Equals([IO.Path]::GetFullPath([string]$identity.ExecutablePath), $Installer, [StringComparison]::OrdinalIgnoreCase)) { throw 'Existing installer PID does not belong to the exact verified installer executable' }
+    $process = Get-Process -Id $ExistingInstallerProcessId -ErrorAction Stop
+    $report.attachedToExistingInstaller = $true
+  } else {
+    $arguments = if ($InstallDirectory) { '/D=' + $installRoot } else { '' }
+    if ($arguments) { $process = Start-Process -FilePath $Installer -ArgumentList $arguments -PassThru }
+    else { $process = Start-Process -FilePath $Installer -PassThru }
+    $ownsInstallerProcess = $true
+    $report.attachedToExistingInstaller = $false
+  }
   $report.installerPid = $process.Id
-  $deadline = [DateTime]::UtcNow.AddSeconds(150)
+  $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
   $windowDeadline = [DateTime]::UtcNow.AddSeconds(25)
   $sawWindow = $false
   $sawForward = $false
@@ -129,7 +141,7 @@ try {
     Start-Sleep -Milliseconds 200
   }
   $process.Refresh()
-  if (-not $process.HasExited) { throw 'Installer wizard exceeded 150 seconds' }
+  if (-not $process.HasExited) { throw ("Installer wizard exceeded {0} seconds" -f $TimeoutSeconds) }
   $process.WaitForExit()
   $process.Refresh()
   $report.installerExitCode = $process.ExitCode
@@ -153,7 +165,7 @@ try {
 } finally {
   # Only the installer process started by this helper may be stopped on failure.
   # Installed app/data are left for the caller's explicit lifecycle cleanup.
-  if ($null -ne $process) {
+  if ($ownsInstallerProcess -and $null -ne $process) {
     try { if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue } } catch {}
   }
   $report.finishedAt = [DateTime]::UtcNow.ToString('o')
