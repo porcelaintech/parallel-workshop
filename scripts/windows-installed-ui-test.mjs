@@ -69,7 +69,10 @@ class CDP {
   }
   async evaluate(expression) {
     const result = await this.send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true });
-    if (result.exceptionDetails) throw new Error(result.exceptionDetails.text || 'Browser JavaScript exception');
+    if (result.exceptionDetails) {
+      const detail = result.exceptionDetails;
+      throw new Error([detail.text, detail.exception?.description || detail.exception?.value].filter(Boolean).join(': ') || 'Browser JavaScript exception');
+    }
     return result.result?.value;
   }
   close() { for (const entry of this.pending.values()) { clearTimeout(entry.timer); entry.reject(new Error('CDP closed')); } this.pending.clear(); this.ws.close(); }
@@ -123,6 +126,9 @@ try {
   page = await CDP.open(target.webSocketDebuggerUrl);
   await page.send('Page.enable');
   await page.send('Emulation.setDeviceMetricsOverride', { width: 1600, height: 1000, deviceScaleFactor: 1, mobile: false });
+  const workbenchWaitStarted = Date.now();
+  report.workbenchDocument = await until(() => page.evaluate(`(() => { if(location.origin!==${JSON.stringify(base)}||!['interactive','complete'].includes(document.readyState)||!document.querySelector('#question')||!document.querySelector('#checks'))return null;return {origin:location.origin,readyState:document.readyState};})()`), 'committed local workbench document ready', 45000);
+  report.workbenchDocument.waitMs = Date.now() - workbenchWaitStarted;
   const { platforms } = await api('/api/platforms');
   assert.equal(platforms.length, 6);
   const ids = platforms.map(item => item.id);
@@ -134,16 +140,57 @@ try {
     assert.equal(persisted.count, 6);
     record('platform selection survives process restart', { selected: persisted.checked });
   } else if (args['live-probe']) {
-    await until(() => page.evaluate(`document.querySelector('#startup-overlay')?.classList.contains('done')`), 'startup completion');
+    await until(() => page.evaluate(`document.querySelector('#startup-overlay')?.classList.contains('done')&&document.querySelectorAll('#checks input').length===6`), 'startup completion');
+    report.limitations.push('Live probes are observations of unauthenticated platform loading, not successful login, message sending, or attachment acceptance.');
+    const liveStarted = Date.now();
+    const networkRequests = new Map();
+    report.documentFailures = [];
+    await page.send('Network.enable');
+    page.on('Network.requestWillBeSent', params => {
+      if (params.type === 'Document') { try { networkRequests.set(params.requestId, new URL(params.request.url).hostname); } catch {} }
+    });
+    page.on('Network.loadingFailed', params => {
+      if (params.type === 'Document') report.documentFailures.push({ hostname: networkRequests.get(params.requestId) || null, errorText: params.errorText, blockedReason: params.blockedReason || null, canceled: Boolean(params.canceled) });
+    });
+    // Restore all six panes for observation, even after the persistence test selected two.
+    // Refresh their documents because a previous deterministic test may have left fixtures.
+    await page.evaluate(`document.querySelectorAll('#checks input').forEach(input=>{if(!input.checked)input.click();});document.querySelectorAll('#panes iframe').forEach(frame=>{frame.src=frame.src;});`);
+    const hostOf = raw => { try { return new URL(raw).hostname || null; } catch { return null; } };
+    const matches = (raw, adapter) => {
+      const host = hostOf(raw);
+      return host && (adapter.homeHosts || [hostOf(adapter.origin)]).some(allowed => host === allowed || host.endsWith('.' + allowed));
+    };
+    let observedTargets = [];
+    const committed = new Map();
+    const loadDeadline = Date.now() + 30000;
+    while (Date.now() < loadDeadline) {
+      observedTargets = await getTargets();
+      for (const platform of platforms) {
+        const target = observedTargets.find(item => item.type === 'iframe' && matches(item.url, platform));
+        if (target && !committed.has(platform.id)) committed.set(platform.id, { hostname: hostOf(target.url), elapsedMs: Date.now() - liveStarted });
+      }
+      if (committed.size === platforms.length) break;
+      await delay(250);
+    }
+    report.frameWaitMs = Date.now() - liveStarted;
     report.platforms = [];
+    const frames = await page.evaluate(`(() => {const ids=${JSON.stringify(ids)};return ids.map(id=>{const frame=document.querySelector('#frame-'+id);const badge=document.querySelector('#badge-'+id);return {id,src:frame?.getAttribute('src')||null,badge:badge?.textContent||null,badgeClass:badge?.className||null,visible:frame?!!frame.getBoundingClientRect().width:false};});})()`);
+    const frameTree = await page.send('Page.getFrameTree');
+    const frameDocuments = [];
+    const collectFrames = node => { if (!node) return; frameDocuments.push({ hostname: hostOf(node.frame?.url), unreachableHostname: hostOf(node.frame?.unreachableUrl), mimeType: node.frame?.mimeType || null }); for (const child of node.childFrames || []) collectFrames(child); };
+    collectFrames(frameTree.frameTree);
+    report.frameDocuments = frameDocuments;
+    report.targetHostnames = [...new Set(observedTargets.filter(item => item.type === 'iframe').map(item => hostOf(item.url)).filter(Boolean))];
     for (const platform of platforms) {
       const started = Date.now();
+      const frame = frames.find(frame => frame.id === platform.id);
+      const observation = { id: platform.id, committedTarget: committed.get(platform.id) || null, iframeSrcHostname: hostOf(frame?.src), badge: frame?.badge || null, badgeClass: frame?.badgeClass || null, visible: frame?.visible || false, targetHostnames: observedTargets.filter(item => item.type === 'iframe' && matches(item.url, platform)).map(item => hostOf(item.url)), observationElapsedMs: Date.now() - liveStarted };
       try {
         const result = await api(`/api/platforms/${platform.id}/probe`);
-        report.platforms.push({ id: platform.id, state: result.state, ok: result.ok, elapsedMs: Date.now() - started, hostname: result.url ? new URL(result.url).hostname : null });
-      } catch (error) { report.platforms.push({ id: platform.id, error: error.message, elapsedMs: Date.now() - started }); }
+        report.platforms.push({ ...observation, state: result.state, probeOk: result.ok, probeElapsedMs: Date.now() - started, hostname: hostOf(result.url) });
+      } catch (error) { report.platforms.push({ ...observation, error: error.message, probeElapsedMs: Date.now() - started }); }
     }
-    record('unauthenticated platform probes recorded; no messages sent');
+    record('unauthenticated platform load observations captured; functional acceptance remains unverified', { waitMs: report.frameWaitMs, committedTargets: committed.size });
     await page.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false }).then(result => writeFileSync(join(evidence, 'live-workbench.png'), Buffer.from(result.data, 'base64')));
   } else {
     const version = await (await fetch(`http://127.0.0.1:${port}/json/version`)).json();

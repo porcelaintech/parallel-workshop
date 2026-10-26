@@ -63,7 +63,7 @@ GitHub Release：历史安装包备份
 
 ## 本轮 Windows 候选构建
 
-`distribution/scripts/build-windows-candidate.mjs` 用于从明确的干净源码提交构建测试候选，默认完整版本为 **`0.6.0-rc.2.A`**，保留 `0.6.0` 三段基数。它生成安装包和 `build-proof.json`，记录源码 commit、完整候选版本、Node 运行时来源校验值、安装包大小与 SHA-256。候选安装包必须小于 **50,000,000 字节**。
+`distribution/scripts/build-windows-candidate.mjs` 用于从明确的干净源码提交构建测试候选，默认完整版本为 **`0.6.0-rc.2.B`**，保留 `0.6.0` 三段基数。它生成安装包和 `build-proof.json`，记录源码 commit、完整候选版本、Node 运行时来源校验值、安装包大小与 SHA-256。候选安装包必须小于 **50,000,000 字节**。
 
 在源码改动已提交、工作树干净，且构建环境已备好 Node 22、NSIS 及解压工具后运行：
 
@@ -72,7 +72,7 @@ node distribution/scripts/build-windows-candidate.mjs
 
 # 输出目录
 # build/windows-acceptance/artifacts/
-#   Braintrust-Setup-0.6.0-rc.2.A.exe
+#   Braintrust-Setup-0.6.0-rc.2.B.exe
 #   build-proof.json
 ```
 
