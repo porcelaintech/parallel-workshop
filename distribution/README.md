@@ -12,7 +12,7 @@
 | macOS Apple 芯片 | `Braintrust-0.6.0.dmg` | 打开 DMG → 把「智囊」拖进 Applications → 打开应用 |
 | macOS Intel | `Braintrust-0.6.0-intel.dmg` | 使用独立 Intel 包，安装方式相同 |
 
-Windows 采用直接下载 EXE 的路线，不以 Microsoft Store 上架、开发者计划注册或 Windows 代码签名作为交付前提。NSIS 安装器按当前用户安装，默认目录是 `%LOCALAPPDATA%\Braintrust`，提供桌面/开始菜单入口和卸载器。Windows 安全提示仍受系统策略、下载来源和文件信誉影响；未签名安装包不能承诺没有 SmartScreen，也不能把自动化静默安装通过等同于普通用户手动安装通过。
+Windows 采用直接下载 EXE 的路线，不以 Microsoft Store 上架、开发者计划注册或 Windows 代码签名作为交付前提。NSIS 安装器按当前用户安装，默认目录是 `%LOCALAPPDATA%\Braintrust`，提供桌面/开始菜单入口和卸载器。Windows 安全提示仍受系统策略、下载来源和文件信誉影响；本轮浏览器下载后的实际文件出现的是经典 Open File - Security Warning（Run / Cancel）；自动确认未推进到已确认的安装器进程。未签名安装包不能承诺没有 SmartScreen，也不能把受控静默安装通过等同于普通用户下载安装全程通过。
 
 Apple 签名与公证可使用用户现有 Apple Developer 资格继续配置；会员资格不等于本机已有可用证书与公证凭证。本机目前未具备可用的 Developer ID 签名/公证条件，现有 DMG 仍按未公证产物处理。本机移除 quarantine 后能启动，不代表新用户下载后没有 Gatekeeper 提示。
 
@@ -46,11 +46,11 @@ GitHub Release：历史安装包备份
 | 数据与浏览器 Profile | `%LOCALAPPDATA%\Braintrust\data` | `~/Library/Application Support/Braintrust/data` |
 | 启动日志 | `%LOCALAPPDATA%\Braintrust\logs` | `~/Library/Logs/Braintrust` |
 
-服务写入 `data/service.json`，包含端口、令牌与进程信息。启动器使用它找回已有服务，并通过 `/api/browser/open` 打开工作台；退出入口调用 `/api/quit`。本轮 Windows 生命周期验收还将检查重复启动、重启应用、运行中覆盖安装和卸载后的状态。
+服务写入 `data/service.json`，包含端口、令牌与进程信息。启动器使用它找回已有服务，并通过 `/api/browser/open` 打开工作台；退出入口调用 `/api/quit`。本轮 Windows 生命周期验收已覆盖重复启动、重启应用、运行中覆盖安装同一候选和运行中卸载后的状态。
 
 ## 当前公网下载状态
 
-**2026-10-26 早先官网与 OSS 安装包曾返回 HTTP 403 / `UserDisable`（`0003-00000801`）；用户充值后，本机复测官网与 Windows EXE 均已恢复 HTTP 200，EXE 哈希与历史记录一致。** Windows 浏览器点击下载流程单独复测，不以本机直链下载代替。充值前的错误证据保留原样。
+**2026-10-26 早先官网与 OSS 安装包曾返回 HTTP 403 / `UserDisable`（`0003-00000801`）；用户充值后，本机复测官网与 Windows EXE 均已恢复 HTTP 200，EXE 哈希与历史记录一致。** Windows 浏览器打开官网并点击实际按钮的下载流程也已通过，下载文件与历史哈希匹配。充值前的错误证据保留原样。
 
 历史 GitHub 备份地址为：
 
@@ -84,7 +84,7 @@ node distribution/scripts/build-windows-candidate.mjs
 
 历史 `.github/workflows/windows-installer-smoke.yml` 已在 Windows CI 中验证过 GitHub 备份 EXE 的静默安装、安装文件、快捷方式图标、直接运行 PowerShell 启动器、headless Edge/CDP 和静默卸载。它显式传入浏览器路径，没有覆盖真实桌面图标启动、自动发现浏览器、官网浏览器下载或已登录平台使用。
 
-本轮新增工具用于扩大覆盖，**测试结果尚待执行取证，本文不预先宣称通过**：
+本轮候选 `0.6.0-rc.2.C` 已在 Windows 2022 无窗口模式、Windows 2025 有窗口中文安装路径模式通过生命周期检查，并通过实际安装向导与自动启动检查。官网恢复后，Windows 浏览器点击下载和哈希校验也已通过。详细范围、旧包缺陷及未验证项见 [2026-10-26 验证记录](../docs/windows-validation-2026-10-26.md)。验证工具包括：
 
 - `scripts/windows-installed-ui-test.mjs`：面向已安装产品做浏览器交互；支持从官网发现并点击 Windows 下载链接、保存下载证据，以及安装后的工作台 UI、确定性测试页面和持久化检查。
 - `scripts/windows-installed-lifecycle-test.ps1`：检查安装器、快捷方式启动、服务与浏览器、应用重启、运行中覆盖安装及卸载；可验证带中文和空格的安装路径。
@@ -94,8 +94,6 @@ node distribution/scripts/build-windows-candidate.mjs
 
 ## 尚未完成的验证与优化
 
-- 官网与 OSS 已恢复；继续以 Windows 浏览器下载证据确认实际按钮、完整文件与哈希。
-- 执行本轮候选安装、图标启动、UI、应用重启、覆盖安装和卸载测试，逐项记录结果。
 - 六平台真实账号的登录、发送、回答与附件矩阵；当前历史证据主要是 probe，DeepSeek 登录页的 `NO_INPUT` 不能算发送成功。
 - 消费者 Windows 10/11 的首次安装、SmartScreen 与手动交互。
 - Windows 系统重启后的启动、会话保持及代理环境行为；应用进程重启不能替代操作系统重启。

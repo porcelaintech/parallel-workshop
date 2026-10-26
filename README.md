@@ -2,6 +2,8 @@
 
 一次提问，多位 AI 并排回答。智囊（原「平行工作台」）把 ChatGPT、DeepSeek、豆包、Kimi、通义千问和文心一言放进同一个工作区。
 
+> **2026-10-26 本地服务分支进度**：官网下载形态已是 Windows EXE / macOS DMG，当前修复候选为 `0.6.0-rc.2.C`。Windows 直接分发，不以商店上架或开发者注册为前提；候选的受控安装与本地功能已在 Windows 虚拟机验证，下载后的系统确认和真实 AI 问答仍未验收。详见[当前分发说明](distribution/README.md)和[本轮验证记录](docs/windows-validation-2026-10-26.md)。以下 v0.4.1 原生/扩展稳定通道说明继续保留，不代表本地服务候选已经正式发布。
+
 - [Windows 安装与打开](Windows/README.md)：一条 PowerShell 命令，之后从桌面「智囊」启动。
 - [macOS 安装与打开](macOS/README.md)：一条终端命令安装原生应用。
 - [复制给 Agent 的极简安装 Prompt](AGENT_INSTALL_PROMPT.md)：按平台直接执行官方命令。
