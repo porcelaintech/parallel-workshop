@@ -81,10 +81,12 @@ const snapshotExpression = `(() => {
   const actions=[...document.querySelectorAll('button,a')].filter(visible).map(el=>(el.innerText||el.getAttribute('aria-label')||'').trim());
   const loginActions=actions.filter(value=>/^(log in|sign in|sign up|登录|注册)(?:\\s|$)/i.test(value));
   const accountMenu=[...document.querySelectorAll('[data-testid="profile-button"],[data-testid="accounts-profile-button"],[data-testid="user-menu-button"]')].some(visible);
-  const input=[...document.querySelectorAll('textarea,[contenteditable="true"]')].some(visible);
+  const inputs=[...document.querySelectorAll('textarea,[contenteditable="true"]')].slice(0,8).map(el=>({tag:el.tagName,id:el.id,contenteditable:el.getAttribute('contenteditable'),visible:visible(el),disabled:Boolean(el.disabled),readOnly:Boolean(el.readOnly),text:String(el.value??el.innerText??'').slice(0,220)}));
+  const input=inputs.some(el=>el.visible&&!el.disabled&&!el.readOnly);
+  const sendButtons=[...document.querySelectorAll('button[aria-label="Send message"],button.wm-compose,button[data-testid="send-button"],button[data-testid="composer-submit-button"]')].slice(0,6).map(el=>({tag:el.tagName,id:el.id,testid:el.getAttribute('data-testid'),ariaLabel:el.getAttribute('aria-label'),ariaDisabled:el.getAttribute('aria-disabled'),type:el.getAttribute('type'),visible:visible(el),disabled:Boolean(el.disabled),outerHTML:el.outerHTML.slice(0,1600)}));
   const challenge=/just a moment|verify you are human|confirm you are human|checking your browser|确认您是人类|验证您是真人/i.test(text.slice(0,5000));
   const rateLimit=/too many requests|rate limit|usage limit|reached.*limit|达到.*上限|请求过于频繁/i.test(text.slice(-5000));
-  return {hostname:location.hostname,title:document.title,readyState:document.readyState,input,loginActions,accountMenu,challenge,rateLimit,fixture:Boolean(window.__fixture),roles,bodyTail:text.slice(-1800)};
+  return {hostname:location.hostname,title:document.title,readyState:document.readyState,input,inputs,sendButtons,domElementCount:document.querySelectorAll('*').length,loginActions,accountMenu,challenge,rateLimit,fixture:Boolean(window.__fixture),roles,bodyTail:text.slice(-1800)};
 })()`;
 let frame, workbench;
 try {
@@ -106,6 +108,8 @@ try {
   if (workbenchTarget) workbench = await CDP.open(workbenchTarget.webSocketDebuggerUrl);
   const deadline = Date.now() + 60000;
   let ready = false;
+  let stableSignature = null;
+  let stableSince = 0;
   while (Date.now() < deadline) {
     let before;
     try {
@@ -122,13 +126,21 @@ try {
       if (before.challenge || before.rateLimit) { report.status = 'blocked'; report.reason = before.challenge ? 'Human verification required; no bypass attempted' : 'Platform rate or usage limit'; break; }
       if (before.roles.length || before.accountMenu) {
         before.roles = before.roles.map(item => ({ role: item.role, text: '[existing content redacted]' }));
+        before.inputs = before.inputs.map(item => ({ ...item, text: '[existing content redacted]' }));
         before.bodyTail = '[existing account or conversation content redacted]';
         report.status = 'blocked'; report.reason = 'Existing conversation or account UI; refusing to use non-clean guest state'; break;
       }
-      if (before.input && before.loginActions.length) {
-        const probe = await api('/api/platforms/chatgpt/probe');
-        report.probe = { state: probe.state, ok: probe.ok };
-        if (probe.state === 'ready') { ready = true; break; }
+      if (before.readyState === 'complete' && before.input && before.loginActions.length) {
+        const signature = JSON.stringify({ inputs: before.inputs, sendButtons: before.sendButtons, loginActions: before.loginActions, domElementCount: before.domElementCount });
+        if (signature !== stableSignature) { stableSignature = signature; stableSince = Date.now(); }
+        else if (Date.now() - stableSince >= 950) {
+          const probe = await api('/api/platforms/chatgpt/probe');
+          report.probe = { state: probe.state, ok: probe.ok };
+          report.readiness = { documentComplete: true, stableObservations: 2, stableForMs: Date.now() - stableSince };
+          if (probe.state === 'ready') { ready = true; break; }
+        }
+      } else {
+        stableSignature = null; stableSince = 0;
       }
     }
     await delay(1000);
@@ -143,6 +155,8 @@ try {
       const sent = await api('/api/send', { text: prompt, platforms: ['chatgpt'], attachments: [] });
       report.sendResult = { ok: sent.ok, results: sent.results?.map(item => ({ id: item.id, ok: item.ok, error: item.error || null, result: item.result })) };
     } catch (error) { report.sendError = error.message; }
+    try { report.afterSend = await frame.evaluate(snapshotExpression); }
+    catch (error) { report.afterSendObservationError = error.message; }
     const responseDeadline = Date.now() + 60000;
     while (Date.now() < responseDeadline) {
       let after;
@@ -159,6 +173,7 @@ try {
       if (!after) { await delay(1000); continue; }
       if (after.fixture || after.accountMenu) {
         after.roles = after.roles.map(item => ({ role: item.role, text: '[unexpected context redacted]' }));
+        after.inputs = after.inputs.map(item => ({ ...item, text: '[unexpected context redacted]' }));
         after.bodyTail = '[unexpected account or fixture context redacted]';
         report.after = after; report.status = 'blocked'; report.reason = 'Unexpected account or fixture context after submission; observation stopped'; break;
       }
