@@ -14,6 +14,10 @@ permissions:
 
 jobs:
   guest:
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [api, trusted-control]
     runs-on: windows-2025
     timeout-minutes: 10
     env:
@@ -52,7 +56,9 @@ jobs:
         shell: powershell
         run: |
           $root=Join-Path $env:LOCALAPPDATA 'Braintrust\service'
-          & (Join-Path $root 'runtime\node-win-x64\node.exe') scripts\windows-guest-send-test.mjs --service-info (Join-Path $env:LOCALAPPDATA 'Braintrust\data\service.json') --evidence evidence
+          $args=@('scripts\windows-guest-send-test.mjs','--service-info',(Join-Path $env:LOCALAPPDATA 'Braintrust\data\service.json'),'--evidence','evidence')
+          if('${{ matrix.mode }}' -eq 'trusted-control'){$args+='--trusted-control'}
+          & (Join-Path $root 'runtime\node-win-x64\node.exe') @args
           if ($LASTEXITCODE -ne 0) {throw 'Guest query is blocked or unverified; inspect evidence'}
       - name: Clean up exact VM installation
         if: always()
@@ -66,5 +72,5 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: real-guest-evidence
+          name: real-guest-evidence-${{ matrix.mode }}
           path: evidence/
