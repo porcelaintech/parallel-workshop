@@ -1,6 +1,6 @@
-import { existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync } from 'node:fs';
 import { spawn } from 'node:child_process';
-import { homedir, platform } from 'node:os';
+import { platform } from 'node:os';
 import { join } from 'node:path';
 import { SERVICE_ROOT } from './paths.mjs';
 import { FrameBridge } from './frame-bridge.mjs';
@@ -17,68 +17,117 @@ export class BrowserManager {
     this.child = null;
     this.browserPath = null;
     this.frameBridge = null;
+    this.starting = null;
+    this.preparing = null;
   }
 
   get running() { return Boolean(this.child && this.child.exitCode === null); }
 
   async ensureRunning() {
+    if (this.starting) return this.starting;
     if (this.running && this.port) return this.status();
+    this.starting = this.startBrowser();
+    try { return await this.starting; }
+    finally { this.starting = null; }
+  }
+
+  async startBrowser() {
+    await this.frameBridge?.stop();
+    this.frameBridge = null;
     this.browserPath = findBrowser(this.browserPreference);
     if (!this.browserPath) throw new Error('未找到可用的 Chromium/Edge/Chrome。请设置 BRAINTRUST_BROWSER_PATH。');
-    this.port = await freePort();
+    const port = await freePort();
+    this.port = port;
     const profile = join(this.dataDir, 'browser-profile');
     mkdirSync(profile, { recursive: true });
     const headless = process.env.BRAINTRUST_BROWSER_HEADLESS === '1' ? ['--headless=new', '--disable-gpu', '--no-sandbox'] : [];
     const args = [
       ...headless,
       `--user-data-dir=${profile}`, '--profile-directory=Default',
-      `--remote-debugging-port=${this.port}`, '--no-first-run', '--no-default-browser-check',
+      `--remote-debugging-port=${port}`, '--no-first-run', '--no-default-browser-check',
       '--disable-background-networking', '--disable-features=Translate', `--app=${this.serviceURL}`
     ];
-    this.child = spawn(this.browserPath, args, { detached: false, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
-    this.child.stdout?.on('data', data => this.log(String(data).trim()));
-    this.child.stderr?.on('data', data => this.log(String(data).trim()));
-    this.child.on('exit', (code, signal) => this.log(`浏览器退出 code=${code ?? ''} signal=${signal ?? ''}`));
-    const deadline = Date.now() + 20000;
-    while (Date.now() < deadline) {
-      try {
-        const response = await fetch(`http://127.0.0.1:${this.port}/json/version`, { signal: AbortSignal.timeout(1000) });
-        if (response.ok) return this.status();
-      } catch {}
-      await sleep(150);
+    const child = spawn(this.browserPath, args, { detached: false, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
+    this.child = child;
+    let launchError = null;
+    child.on('error', error => { launchError = error; });
+    child.stdout?.on('data', data => this.log(String(data).trim()));
+    child.stderr?.on('data', data => this.log(String(data).trim()));
+    child.on('exit', (code, signal) => {
+      this.log(`浏览器退出 code=${code ?? ''} signal=${signal ?? ''}`);
+      if (this.child === child) {
+        this.child = null;
+        this.port = null;
+        const bridge = this.frameBridge;
+        this.frameBridge = null;
+        bridge?.stop().catch(() => {});
+      }
+    });
+    try {
+      const deadline = Date.now() + 20000;
+      while (Date.now() < deadline) {
+        if (launchError) throw launchError;
+        if (child.exitCode !== null || child.signalCode !== null) throw new Error('浏览器在启动完成前退出');
+        try {
+          const response = await fetch(`http://127.0.0.1:${port}/json/version`, { signal: AbortSignal.timeout(1000) });
+          if (response.ok) return this.status();
+        } catch {}
+        await sleep(150);
+      }
+      throw new Error('浏览器启动超时');
+    } catch (error) {
+      try { child.kill(); } catch {}
+      if (this.child === child) { this.child = null; this.port = null; }
+      throw error;
     }
-    throw new Error('浏览器启动超时');
   }
 
   async stop() {
+    if (this.starting) await this.starting.catch(() => {});
     try { await this.frameBridge?.stop(); } catch {}
     this.frameBridge = null;
-    if (!this.child) return;
-    try { this.child.kill(); } catch {}
-    this.child = null;
-    this.port = null;
+    const child = this.child;
+    const port = this.port;
+    if (!child) return;
+    // Let Chromium flush its profile before falling back to terminating the process.
+    try {
+      const response = await fetch(`http://127.0.0.1:${port}/json/version`, { signal: AbortSignal.timeout(1000) });
+      const version = await response.json();
+      if (version.webSocketDebuggerUrl) await cdpCommand(version.webSocketDebuggerUrl, 'Browser.close', {}, 2000);
+    } catch {}
+    const deadline = Date.now() + 3000;
+    while (child.exitCode === null && child.signalCode === null && Date.now() < deadline) await sleep(50);
+    if (child.exitCode === null && child.signalCode === null) {
+      try { child.kill(); } catch {}
+      const killDeadline = Date.now() + 2000;
+      while (child.exitCode === null && child.signalCode === null && Date.now() < killDeadline) await sleep(50);
+    }
+    if (this.child === child) { this.child = null; this.port = null; }
   }
 
   async prepareWorkbench() {
     await this.ensureRunning();
-    if (!this.frameBridge) {
-      this.frameBridge = new FrameBridge({ browserPort: this.port, pageURL: this.serviceURL, log: this.log });
-    }
-    await this.frameBridge.start();
-    return { ok: true, browserPort: this.port };
+    if (this.preparing) return this.preparing;
+    this.preparing = (async () => {
+      if (!this.frameBridge) this.frameBridge = new FrameBridge({ browserPort: this.port, pageURL: this.serviceURL, log: this.log });
+      await this.frameBridge.start();
+      return { ok: true, browserPort: this.port };
+    })();
+    try { return await this.preparing; }
+    finally { this.preparing = null; }
   }
 
   async status() {
     let version = null;
     if (this.port) {
-      try { version = await (await fetch(`http://127.0.0.1:${this.port}/json/version`)).json(); } catch {}
+      try { version = await (await fetch(`http://127.0.0.1:${this.port}/json/version`, { signal: AbortSignal.timeout(1500) })).json(); } catch {}
     }
     return { running: this.running, port: this.port, path: this.browserPath, version };
   }
 
   async listTargets() {
     if (!this.port) return [];
-    const response = await fetch(`http://127.0.0.1:${this.port}/json/list`);
+    const response = await fetch(`http://127.0.0.1:${this.port}/json/list`, { signal: AbortSignal.timeout(3000) });
     if (!response.ok) throw new Error(`无法读取浏览器目标（HTTP ${response.status}）`);
     return await response.json();
   }
@@ -88,11 +137,11 @@ export class BrowserManager {
     const targets = await this.listTargets();
     const target = targets.find(item => item.type === 'page' && (item.url === this.serviceURL || item.url.startsWith(this.serviceURL)));
     if (target) {
-      const response = await fetch(`http://127.0.0.1:${this.port}/json/activate/${target.id}`);
+      const response = await fetch(`http://127.0.0.1:${this.port}/json/activate/${target.id}`, { signal: AbortSignal.timeout(3000) });
       if (!response.ok) throw new Error(`无法激活工作台（HTTP ${response.status}）`);
       return target;
     }
-    const response = await fetch(`http://127.0.0.1:${this.port}/json/new?${encodeURIComponent(this.serviceURL)}`, { method: 'PUT' });
+    const response = await fetch(`http://127.0.0.1:${this.port}/json/new?${encodeURIComponent(this.serviceURL)}`, { method: 'PUT', signal: AbortSignal.timeout(3000) });
     if (!response.ok) throw new Error(`无法打开工作台（HTTP ${response.status}）`);
     return await response.json();
   }
@@ -100,7 +149,7 @@ export class BrowserManager {
   async openPlatform(adapter) {
     await this.ensureRunning();
     const url = adapter.origin;
-    const response = await fetch(`http://127.0.0.1:${this.port}/json/new?${encodeURIComponent(url)}`, { method: 'PUT' });
+    const response = await fetch(`http://127.0.0.1:${this.port}/json/new?${encodeURIComponent(url)}`, { method: 'PUT', signal: AbortSignal.timeout(3000) });
     if (!response.ok) throw new Error(`无法打开 ${adapter.name}（HTTP ${response.status}）`);
     return await response.json();
   }
@@ -136,51 +185,137 @@ function hostMatches(raw, adapter) {
 }
 
 function buildInjection(adapter, text, attachments = []) {
-  const cfg = { ...adapter, text };
-  const selectors = JSON.stringify(adapter.input?.selectors || []);
-  const send = JSON.stringify(adapter.send || { type: 'enter' });
-  const payload = JSON.stringify(text);
-  const attachmentPayload = JSON.stringify(attachments.filter(item => item && item.data).slice(0, 10));
-  return `(async () => {\n` +
-    `const text=${payload}, selectors=${selectors}, send=${send}, attachments=${attachmentPayload};\n` +
-    `if(${JSON.stringify(adapter.prepare?.clickSelector || '')}){const p=${JSON.stringify(adapter.prepare?.clickSelector || '')};const q2=s=>{try{return s.startsWith('xpath:')?document.evaluate(s.slice(6),document,null,XPathResult.FIRST_ORDERED_NODE_TYPE,null).singleNodeValue:document.querySelector(s)}catch{return null}};q2(p)?.click();await new Promise(r=>setTimeout(r,${Math.max(0, Number(adapter.prepare?.waitSeconds || 0) * 1000)}));}\n` +
-    `const q=s=>{try{return s.startsWith('xpath:')?document.evaluate(s.slice(6),document,null,XPathResult.FIRST_ORDERED_NODE_TYPE,null).singleNodeValue:document.querySelector(s)}catch{return null}};\n` +
-    `const el=selectors.map(q).find(Boolean)||document.querySelector('textarea,[contenteditable="true"]');\n` +
-    `if(!el)return {ok:false,error:'NO_INPUT'};\n` +
-    `const target=el; target.focus();\n` +
-    `if(target.matches('textarea,input')){const p=target.tagName==='TEXTAREA'?HTMLTextAreaElement.prototype:HTMLInputElement.prototype;const d=Object.getOwnPropertyDescriptor(p,'value');if(d?.set)d.set.call(target,text);else target.value=text;target.dispatchEvent(new Event('input',{bubbles:true}));target.dispatchEvent(new Event('change',{bubbles:true}));}\n` +
-    `else{const r=document.createRange();r.selectNodeContents(target);const s=getSelection();s.removeAllRanges();s.addRange(r);try{document.execCommand('insertText',false,text)}catch{target.textContent=text}target.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:text}));}\n` +
-    `if(attachments.length){const dt=new DataTransfer();for(const a of attachments){try{const bytes=Uint8Array.from(atob(a.data),c=>c.charCodeAt(0));dt.items.add(new File([bytes],a.name||'attachment',{type:a.mime||'application/octet-stream'}));}catch{}}const qs=${JSON.stringify(adapter.attachment?.selectors || [])};const fileInput=qs.map(s=>q(s)).find(x=>x&&x.tagName==='INPUT'&&x.type==='file')||document.querySelector('input[type=file]');if(fileInput&&dt.files.length){fileInput.files=dt.files;fileInput.dispatchEvent(new Event('input',{bubbles:true}));fileInput.dispatchEvent(new Event('change',{bubbles:true}));}}\n` +
-    `const chain=send.selectors||[];const b=chain.map(q).find(x=>x&&!x.disabled&&x.getAttribute('aria-disabled')!=='true');\n` +
-    `if(send.type==='button'||send.type==='pointer'||send.type==='combo'){if(!b)return {ok:false,error:'NO_SEND_BUTTON'};b.click();if(send.type==='combo')target.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',code:'Enter',keyCode:13,which:13,bubbles:true}));return {ok:true,sent:send.type};}\n` +
-    `if(send.type==='paragraph'){try{document.execCommand('insertParagraph');return {ok:true,sent:'paragraph'}}catch{return {ok:false,error:'PARAGRAPH_NOT_ACCEPTED'}}}\n` +
-    `for(const type of ['keydown','keypress','keyup'])target.dispatchEvent(new KeyboardEvent(type,{key:'Enter',code:'Enter',keyCode:13,which:13,bubbles:true,cancelable:true}));return {ok:true,sent:'enter'};})()`;
+  // Serialize one self-contained page function; no browser extension API is required.
+  return `(${injectIntoPage.toString()})(${JSON.stringify({ ...adapter, text, attachments: attachments.slice(0, 10) })})`;
+}
+
+async function injectIntoPage(cfg) {
+  const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+  const query = selector => {
+    try { return selector.startsWith('xpath:') ? document.evaluate(selector.slice(6), document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue : document.querySelector(selector); }
+    catch { return null; }
+  };
+  const visible = el => Boolean(el && el.getClientRects?.().length && getComputedStyle(el).visibility !== 'hidden');
+  const first = (selectors, predicate = visible) => (selectors || []).map(query).find(predicate);
+  if (cfg.prepare?.clickSelector) {
+    query(cfg.prepare.clickSelector)?.click();
+    await sleep(Math.min(5000, Math.max(0, Number(cfg.prepare.waitSeconds || 0) * 1000)));
+  }
+  let target = first(cfg.input?.selectors) || [...document.querySelectorAll('textarea,[contenteditable="true"]')].find(visible);
+  if (target && !target.matches('textarea,input,[contenteditable="true"]')) target = target.querySelector('textarea,input,[contenteditable="true"]');
+  if (!target) return { ok: false, error: 'NO_INPUT' };
+  target.focus();
+  await sleep(120);
+  if (target.matches('textarea,input')) {
+    const proto = target.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+    const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
+    if (setter) setter.call(target, cfg.text); else target.value = cfg.text;
+    target.dispatchEvent(new Event('input', { bubbles: true }));
+    target.dispatchEvent(new Event('change', { bubbles: true }));
+  } else {
+    const range = document.createRange();
+    range.selectNodeContents(target);
+    const selection = getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+    if (!document.execCommand('insertText', false, cfg.text)) target.textContent = cfg.text;
+    target.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: cfg.text }));
+  }
+  await sleep(150);
+
+  const attachments = cfg.attachments || [];
+  if (attachments.length) {
+    const data = new DataTransfer();
+    for (const attachment of attachments) {
+      try {
+        if (!attachment?.data) return { ok: false, error: 'INVALID_ATTACHMENT' };
+        const bytes = Uint8Array.from(atob(attachment.data), char => char.charCodeAt(0));
+        data.items.add(new File([bytes], attachment.name || 'attachment', { type: attachment.mime || 'application/octet-stream' }));
+      } catch { return { ok: false, error: 'INVALID_ATTACHMENT' }; }
+    }
+    const opener = first(cfg.attachment?.openSelectors);
+    if (opener) { opener.click(); await sleep(600); }
+    const fileInput = first(cfg.attachment?.selectors, el => el?.matches('input[type="file"]')) || document.querySelector('input[type="file"]');
+    if (!fileInput) return { ok: false, error: 'ATTACHMENT_REQUIRES_MANUAL_UPLOAD' };
+    fileInput.files = data.files;
+    fileInput.dispatchEvent(new Event('input', { bubbles: true }));
+    fileInput.dispatchEvent(new Event('change', { bubbles: true }));
+    if (fileInput.files.length !== attachments.length) return { ok: false, error: 'ATTACHMENT_NOT_ACCEPTED' };
+    await sleep(150);
+  }
+
+  const send = cfg.send || { type: 'enter' };
+  if (['button', 'pointer', 'combo'].includes(send.type)) {
+    const enabled = el => visible(el) && !el.disabled && el.getAttribute('aria-disabled') !== 'true';
+    let button;
+    const deadline = Date.now() + 2000;
+    do {
+      button = first(send.selectors, enabled);
+      if (button) break;
+      await sleep(50);
+    } while (Date.now() < deadline);
+    if (!button) return { ok: false, error: 'NO_SEND_BUTTON' };
+    if (send.type === 'pointer') {
+      const rect = button.getBoundingClientRect();
+      const init = { bubbles: true, cancelable: true, clientX: rect.x + rect.width / 2, clientY: rect.y + rect.height / 2, button: 0 };
+      for (const type of ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']) button.dispatchEvent(new (type.startsWith('pointer') ? PointerEvent : MouseEvent)(type, init));
+    } else button.click();
+    if (send.type === 'combo') target.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
+    return { ok: true, sent: send.type, attachmentsInjected: attachments.length };
+  }
+  if (send.type === 'paragraph') return document.execCommand('insertParagraph') ? { ok: true, sent: 'paragraph' } : { ok: false, error: 'PARAGRAPH_NOT_ACCEPTED' };
+  for (const type of ['keydown', 'keypress', 'keyup']) target.dispatchEvent(new KeyboardEvent(type, { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true }));
+  return { ok: true, sent: 'enter', attachmentsInjected: attachments.length };
 }
 
 function buildProbe(adapter) {
   return `(() => { const has=s=>(s||[]).some(x=>{try{return x.startsWith('xpath:')?!!document.evaluate(x.slice(6),document,null,XPathResult.FIRST_ORDERED_NODE_TYPE,null).singleNodeValue:!!document.querySelector(x)}catch{return false}}); return {input:has(${JSON.stringify(adapter.input?.selectors || [])}),loggedOut:has(${JSON.stringify(adapter.probe?.loggedOut || [])}),loginModal:has(${JSON.stringify(adapter.probe?.loginModal || [])}),challenge:has(${JSON.stringify(adapter.probe?.challenge || [])}),url:location.href};})()`;
 }
 
-async function evaluate(wsURL, expression) {
+async function cdpCommand(wsURL, method, params, timeout = 15000) {
   if (typeof WebSocket !== 'function') throw new Error('当前 Node 运行时缺少 WebSocket；请使用随包提供的 Node 22+ 运行时');
   const ws = new WebSocket(wsURL);
-  let id = 0;
-  await new Promise((resolve, reject) => { ws.addEventListener('open', resolve, { once: true }); ws.addEventListener('error', reject, { once: true }); });
-  const result = await new Promise((resolve, reject) => {
-    const requestId = ++id;
-    const timer = setTimeout(() => reject(new Error('CDP 执行超时')), 15000);
-    const onMessage = event => {
-      const message = JSON.parse(event.data);
-      if (message.id !== requestId) return;
-      clearTimeout(timer); ws.removeEventListener('message', onMessage);
-      if (message.error) reject(new Error(message.error.message));
-      else resolve(message.result?.result?.value);
-    };
-    ws.addEventListener('message', onMessage);
-    ws.send(JSON.stringify({ id: requestId, method: 'Runtime.evaluate', params: { expression, returnByValue: true, awaitPromise: true } }));
-  });
-  try { ws.close(); } catch {}
-  return result;
+  try {
+    await new Promise((resolve, reject) => {
+      const finish = (error) => { clearTimeout(timer); ws.removeEventListener('open', onOpen); ws.removeEventListener('error', onError); error ? reject(error) : resolve(); };
+      const onOpen = () => finish();
+      const onError = () => finish(new Error('CDP 连接失败'));
+      const timer = setTimeout(() => finish(new Error('CDP 连接超时')), Math.min(timeout, 5000));
+      ws.addEventListener('open', onOpen, { once: true });
+      ws.addEventListener('error', onError, { once: true });
+    });
+    return await new Promise((resolve, reject) => {
+      const finish = (error, value) => {
+        clearTimeout(timer);
+        ws.removeEventListener('message', onMessage);
+        ws.removeEventListener('close', onClose);
+        ws.removeEventListener('error', onError);
+        error ? reject(error) : resolve(value);
+      };
+      const onClose = () => finish(new Error('CDP 连接已关闭'));
+      const onError = () => finish(new Error('CDP 连接失败'));
+      const onMessage = event => {
+        let message;
+        try { message = JSON.parse(event.data); } catch { return; }
+        if (message.id !== 1) return;
+        if (message.error) finish(new Error(message.error.message));
+        else finish(null, message.result);
+      };
+      const timer = setTimeout(() => finish(new Error('CDP 执行超时')), timeout);
+      ws.addEventListener('message', onMessage);
+      ws.addEventListener('close', onClose, { once: true });
+      ws.addEventListener('error', onError, { once: true });
+      ws.send(JSON.stringify({ id: 1, method, params }));
+    });
+  } finally {
+    try { ws.close(); } catch {}
+  }
+}
+
+async function evaluate(wsURL, expression) {
+  const result = await cdpCommand(wsURL, 'Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true });
+  if (result.exceptionDetails) throw new Error(result.exceptionDetails.exception?.description || result.exceptionDetails.text || '页面注入执行失败');
+  return result.result?.value;
 }
 
 function findBrowser(preference) {
@@ -192,7 +327,7 @@ function findBrowser(preference) {
       ? [join(SERVICE_ROOT, 'runtime', 'chrome-mac-arm64', 'Google Chrome for Testing.app', 'Contents', 'MacOS', 'Google Chrome for Testing'), join(SERVICE_ROOT, 'runtime', 'chrome-mac-x64', 'Google Chrome for Testing.app', 'Contents', 'MacOS', 'Google Chrome for Testing')]
       : [];
   const system = platform() === 'win32'
-    ? [join(process.env.PROGRAMFILES || 'C:\\Program Files', 'Microsoft', 'Edge', 'Application', 'msedge.exe'), join(process.env.LOCALAPPDATA || '', 'Microsoft', 'Edge', 'Application', 'msedge.exe'), join(process.env.PROGRAMFILES || 'C:\\Program Files', 'Google', 'Chrome', 'Application', 'chrome.exe')]
+    ? [process.env['ProgramFiles(x86)'], process.env.ProgramFiles, process.env.PROGRAMFILES, process.env.LOCALAPPDATA].filter(Boolean).flatMap(root => [join(root, 'Microsoft', 'Edge', 'Application', 'msedge.exe'), join(root, 'Google', 'Chrome', 'Application', 'chrome.exe')])
     : platform() === 'darwin'
       ? ['/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge', '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', '/Applications/Chromium.app/Contents/MacOS/Chromium']
       : ['/usr/bin/microsoft-edge', '/usr/bin/google-chrome', '/usr/bin/chromium'];

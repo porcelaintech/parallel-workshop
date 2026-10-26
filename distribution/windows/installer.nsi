@@ -4,6 +4,9 @@ Unicode true
 !ifndef VERSION
   !define VERSION "0.6.0"
 !endif
+!ifndef NUMERIC_VERSION
+  !define NUMERIC_VERSION "0.6.0.0"
+!endif
 
 !define APP_NAME "智囊"
 !define APP_ID "Braintrust"
@@ -22,7 +25,7 @@ ManifestDPIAware true
 Icon "assets\AppIcon.ico"
 UninstallIcon "assets\AppIcon.ico"
 BrandingText "${APP_NAME} · Braintrust"
-VIProductVersion "${VERSION}.0"
+VIProductVersion "${NUMERIC_VERSION}"
 VIAddVersionKey "ProductName" "${APP_NAME}"
 VIAddVersionKey "CompanyName" "${APP_PUBLISHER}"
 VIAddVersionKey "FileDescription" "${APP_NAME} 安装程序"
@@ -45,13 +48,31 @@ Function .onInstSuccess
   done:
 FunctionEnd
 
+; Use the stop helper carried by this installer, including when upgrading an old release.
+; Its ServiceRoot argument also supports an existing custom installation directory.
+!macro StopInstalledService FUNCTION_NAME
+Function ${FUNCTION_NAME}
+  InitPluginsDir
+  SetOutPath "$PLUGINSDIR"
+  File /oname=braintrust-stop.ps1 "payload\stop.ps1"
+  nsExec::ExecToStack /TIMEOUT=30000 '"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$PLUGINSDIR\braintrust-stop.ps1" -ServiceRoot "$INSTDIR\service"'
+  Pop $0
+  Pop $1
+  StrCmp $0 "0" stopped
+    DetailPrint "$1"
+    MessageBox MB_ICONSTOP|MB_OK "无法停止正在运行的智囊。请关闭智囊后重试。" /SD IDOK
+    SetErrorLevel 1
+    Abort
+  stopped:
+FunctionEnd
+!macroend
+!insertmacro StopInstalledService StopInstalledService
+!insertmacro StopInstalledService un.StopInstalledService
+
 Section "Install"
   SetShellVarContext current
+  Call StopInstalledService
   SetOutPath "$INSTDIR"
-
-  ; 先停掉旧服务，避免覆盖正在运行的 server.mjs。
-  IfFileExists "$INSTDIR\stop.ps1" 0 +2
-    nsExec::ExecToLog 'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$INSTDIR\stop.ps1"'
 
   WriteUninstaller "$INSTDIR\Uninstall.exe"
 
@@ -85,13 +106,16 @@ SectionEnd
 
 Section "Uninstall"
   SetShellVarContext current
-  IfFileExists "$INSTDIR\stop.ps1" 0 +2
-    nsExec::ExecToLog 'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$INSTDIR\stop.ps1"'
+  Call un.StopInstalledService
 
   Delete "$DESKTOP\${SHORTCUT_NAME}.lnk"
   Delete "$SMPROGRAMS\${SHORTCUT_NAME}\${SHORTCUT_NAME}.lnk"
   RMDir "$SMPROGRAMS\${SHORTCUT_NAME}"
   DeleteRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\Braintrust"
   DeleteRegKey HKCU "Software\Braintrust"
-  RMDir /r "$INSTDIR"
+  ; Browser profiles, login state, data and logs survive uninstall/reinstall.
+  SetOutPath "$TEMP"
+  RMDir /r "$INSTDIR\service"
+  Delete "$INSTDIR\Uninstall.exe"
+  RMDir "$INSTDIR"
 SectionEnd

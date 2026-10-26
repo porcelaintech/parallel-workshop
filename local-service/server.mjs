@@ -154,7 +154,10 @@ async function handler(request, response) {
         for (const id of ids) {
           const adapter = adapters.find(item => item.id === id);
           if (!adapter) { results.push({ id, ok: false, error: 'UNKNOWN_PLATFORM' }); continue; }
-          try { results.push({ id, name: adapter.name, ok: true, result: await browser.send(adapter, body.text, Array.isArray(body.attachments) ? body.attachments : []) }); }
+          try {
+            const result = await browser.send(adapter, body.text, Array.isArray(body.attachments) ? body.attachments : []);
+            results.push({ id, name: adapter.name, ok: result?.ok === true, result, ...(result?.ok === true ? {} : { error: result?.error || 'SEND_NOT_CONFIRMED' }) });
+          }
           catch (error) { results.push({ id, name: adapter.name, ok: false, error: error.message }); }
         }
         return sendJSON(response, 200, { ok: results.some(item => item.ok), results });

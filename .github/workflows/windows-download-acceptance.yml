@@ -1,0 +1,125 @@
+name: Windows download acceptance
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [release/local-service]
+    paths:
+      - '.github/workflows/windows-download-acceptance.yml'
+      - 'scripts/windows-installed-*'
+      - 'distribution/windows/**'
+      - 'distribution/scripts/build-windows-candidate.mjs'
+      - 'local-service/**'
+
+permissions:
+  contents: read
+
+env:
+  CANDIDATE_VERSION: '0.6.0-rc.2'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+      - name: Install NSIS compiler
+        run: sudo apt-get update -qq && sudo apt-get install -y nsis
+      - name: Build candidate bound to source commit
+        run: node distribution/scripts/build-windows-candidate.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-candidate
+          path: build/windows-acceptance/artifacts/
+
+  public-baseline:
+    runs-on: windows-2025
+    timeout-minutes: 20
+    env:
+      CI: 'true'
+      BRAINTRUST_NO_DIALOG: '1'
+      BRAINTRUST_BROWSER_HEADLESS: '1'
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+      - name: Browser download from current public site
+        continue-on-error: true
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force evidence | Out-Null
+          $edge = @((Join-Path ${env:ProgramFiles(x86)} 'Microsoft\Edge\Application\msedge.exe'), (Join-Path $env:ProgramFiles 'Microsoft\Edge\Application\msedge.exe')) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+          if (-not $edge) { throw 'Microsoft Edge not found for public browser download' }
+          node scripts/windows-installed-ui-test.mjs --download --browser $edge --url https://braintrust.chat/ --output "$env:RUNNER_TEMP\public-setup.exe" --evidence evidence
+          if ($LASTEXITCODE -ne 0) { throw 'Public browser download failed; evidence retained' }
+      - name: Download identical GitHub backup and verify historical hash
+        shell: powershell
+        run: |
+          $url = 'https://github.com/porcelaintech/parallel-workshop/releases/download/v0.6.0-rc.1/Braintrust-Setup-0.6.0.exe'
+          $file = Join-Path $env:RUNNER_TEMP 'baseline-setup.exe'
+          Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile $file -TimeoutSec 120
+          $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $file).Hash.ToLower()
+          if ($hash -ne '5b25f75d70ce9c20c5aa11513048e47af475258b488f8cab5be6463229a5ac65') { throw 'Historical backup hash mismatch' }
+          @{ url=$url; sha256=$hash; bytes=(Get-Item $file).Length } | ConvertTo-Json | Set-Content evidence\baseline-download.json -Encoding UTF8
+      - name: Published installer lifecycle and UI baseline
+        continue-on-error: true
+        shell: powershell
+        run: |
+          & scripts\windows-installed-lifecycle-test.ps1 -Installer "$env:RUNNER_TEMP\baseline-setup.exe" -Evidence evidence\baseline -ExpectedVersion '0.6.0' -PublicBaseline -UiTest "$env:GITHUB_WORKSPACE\scripts\windows-installed-ui-test.mjs"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: public-baseline-evidence
+          path: evidence/
+
+  candidate:
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-2022
+            mode: headless
+          - os: windows-2025
+            mode: headed-unicode
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    env:
+      CI: 'true'
+      BRAINTRUST_NO_DIALOG: '1'
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-candidate
+          path: candidate/
+      - name: Verify installer identity and PowerShell parsing
+        shell: powershell
+        run: |
+          $proof = Get-Content candidate\build-proof.json -Raw | ConvertFrom-Json
+          if ($proof.sourceCommit -ne $env:GITHUB_SHA) { throw 'Candidate source commit mismatch' }
+          $file = Join-Path (Resolve-Path candidate) $proof.installer.name
+          if ((Get-FileHash $file -Algorithm SHA256).Hash.ToLower() -ne $proof.installer.sha256) { throw 'Candidate checksum mismatch' }
+          foreach ($path in @('scripts\windows-installed-lifecycle-test.ps1', 'distribution\windows\stop.ps1')) {
+            $tokens=$null; $errors=$null
+            [Management.Automation.Language.Parser]::ParseFile((Resolve-Path $path), [ref]$tokens, [ref]$errors) | Out-Null
+            if ($errors.Count) { throw ($errors | Out-String) }
+          }
+      - name: Installed desktop launch, UI, restart, live upgrade and uninstall
+        shell: powershell
+        run: |
+          if ('${{ matrix.mode }}' -eq 'headless') { $env:BRAINTRUST_BROWSER_HEADLESS='1' }
+          else { Remove-Item Env:BRAINTRUST_BROWSER_HEADLESS -ErrorAction SilentlyContinue }
+          Remove-Item Env:BRAINTRUST_BROWSER_PATH -ErrorAction SilentlyContinue
+          $params = @{ Installer=(Resolve-Path "candidate\Braintrust-Setup-$env:CANDIDATE_VERSION.exe").Path; Evidence='evidence'; ExpectedVersion=$env:CANDIDATE_VERSION; UiTest="$env:GITHUB_WORKSPACE\scripts\windows-installed-ui-test.mjs" }
+          if ('${{ matrix.mode }}' -eq 'headed-unicode') { $params.InstallDirectory = Join-Path $env:RUNNER_TEMP '测试 用户\Braintrust App' }
+          & scripts\windows-installed-lifecycle-test.ps1 @params
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: candidate-evidence-${{ matrix.os }}-${{ matrix.mode }}
+          path: evidence/
