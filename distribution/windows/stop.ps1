@@ -8,10 +8,11 @@ param(
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
 
-# Match the complete server argument, never a product-name substring or another Node app.
+# The installed launcher invokes node.exe followed immediately by this server script.
+# A different Node tool merely receiving server.mjs as an input is not ours to stop.
 $server = [IO.Path]::GetFullPath((Join-Path $ServiceRoot 'server.mjs'))
 $escapedServer = [regex]::Escape($server)
-$serverArgument = '(?i)(?:^|\s)(?:"' + $escapedServer + '"|' + $escapedServer + ')(?=\s|$)'
+$serverArgument = '(?i)^\s*(?:"[^"]+"|[^\s"]+)\s+(?:"' + $escapedServer + '"|' + $escapedServer + ')(?=\s|$)'
 
 function Test-ProcessIdentity($Original, $Current) {
   return ($null -ne $Current -and $null -ne $Original.CreationDate -and

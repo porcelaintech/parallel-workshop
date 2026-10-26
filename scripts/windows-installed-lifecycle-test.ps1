@@ -5,6 +5,7 @@ param(
   [string]$ExpectedVersion = '',
   [string]$InstallDirectory = '',
   [string]$UiTest = (Join-Path $PSScriptRoot 'windows-installed-ui-test.mjs'),
+  [switch]$LiveProbe,
   [switch]$PublicBaseline
 )
 
@@ -17,6 +18,7 @@ $installRoot = if ($InstallDirectory) { [IO.Path]::GetFullPath($InstallDirectory
 $serviceRoot = Join-Path $installRoot 'service'
 $dataRoot = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'Braintrust\data'
 $infoPath = Join-Path $dataRoot 'service.json'
+$profilePath = Join-Path $dataRoot 'browser-profile'
 $serverPath = Join-Path $serviceRoot 'server.mjs'
 $nodePath = Join-Path $serviceRoot 'runtime\node-win-x64\node.exe'
 $desktopShortcut = Join-Path ([Environment]::GetFolderPath('Desktop')) 'Braintrust.lnk'
@@ -33,6 +35,7 @@ $report = [ordered]@{
   os = [Environment]::OSVersion.VersionString
   browserMode = $(if ($env:BRAINTRUST_BROWSER_HEADLESS -eq '1') { 'headless' } else { 'headed' })
   checks = (New-Object System.Collections.Generic.List[object])
+  observations = (New-Object System.Collections.Generic.List[object])
   limitations = @('A hosted Windows VM does not establish SmartScreen reputation or physical-device behavior.', 'Installer execution is automated; third-party account login and real AI responses require separate validation.')
 }
 $script:currentInfo = $null
@@ -67,6 +70,28 @@ function Get-OwnedServers {
   })
 }
 
+function Get-ProfileBrowsers {
+  $escaped = [regex]::Escape([IO.Path]::GetFullPath($profilePath))
+  $argument = '(?i)(?:^|\s)(?:"--user-data-dir=' + $escaped + '"|--user-data-dir="' + $escaped + '"|--user-data-dir=' + $escaped + ')(?=\s|$)'
+  @(Get-CimInstance Win32_Process -ErrorAction Stop | Where-Object {
+    ($_.Name -ieq 'msedge.exe' -or $_.Name -ieq 'chrome.exe') -and $_.CommandLine -and $_.CommandLine -match $argument
+  })
+}
+
+function Get-ProductLaunchers {
+  $escaped = [regex]::Escape((Join-Path $serviceRoot 'launcher.ps1'))
+  $argument = '(?i)(?:^|\s)(?:"' + $escaped + '"|' + $escaped + ')(?=\s|$)'
+  @(Get-CimInstance Win32_Process -ErrorAction Stop | Where-Object {
+    $_.Name -ieq 'powershell.exe' -and $_.CommandLine -and $_.CommandLine -match $argument
+  })
+}
+
+function Get-WorkbenchTargetCount($Health) {
+  $targets = @(Invoke-RestMethod -Uri "http://127.0.0.1:$($Health.browser.port)/json/list" -TimeoutSec 5)
+  $prefix = "http://127.0.0.1:$($script:currentInfo.port)/"
+  return @($targets | Where-Object { $_.type -eq 'page' -and ([string]$_.url).StartsWith($prefix) }).Count
+}
+
 function Get-ReadyService {
   if (-not (Test-Path -LiteralPath $infoPath)) { return $null }
   try {
@@ -74,6 +99,9 @@ function Get-ReadyService {
     $headers = @{ Authorization = "Bearer $($info.token)" }
     $health = Invoke-RestMethod -Uri "http://127.0.0.1:$($info.port)/api/health" -Headers $headers -TimeoutSec 2
     if (-not $health.ok -or -not $health.browser.running) { return $null }
+    # Browser process creation precedes its CDP version endpoint becoming ready.
+    $browserVersion = $health.browser.version
+    if ($null -eq $browserVersion -or -not $browserVersion.PSObject.Properties['Browser'] -or -not ([string]$browserVersion.Browser)) { return $null }
     $process = Get-CimInstance Win32_Process -Filter "ProcessId=$([int]$info.pid)" -ErrorAction Stop
     if (-not $process -or $process.ExecutablePath -ine $nodePath) { return $null }
     $script:currentInfo = $info
@@ -100,8 +128,13 @@ function Install-Product {
 
 function Start-DesktopProduct {
   Remove-Item Env:\BRAINTRUST_BROWSER_PATH -ErrorAction SilentlyContinue
-  Start-Process -FilePath $desktopShortcut | Out-Null
-  return (Wait-Until { Get-ReadyService } 'desktop shortcut -> bundled Node -> auto-discovered browser' 60)
+  $wrapper = Start-Process -FilePath $desktopShortcut -PassThru
+  # WSH returns after creating launcher.ps1; wait for that exact launcher too so
+  # repeat-open assertions cannot pass merely by reading the previous health.
+  if ($wrapper -and -not $wrapper.WaitForExit(10000)) { throw 'Desktop shortcut wrapper did not finish' }
+  $health = Wait-Until { Get-ReadyService } 'desktop shortcut -> bundled Node -> auto-discovered browser' 60
+  Wait-Until { @(Get-ProductLaunchers).Count -eq 0 } 'desktop launcher completion' 60 | Out-Null
+  return (Wait-Until { Get-ReadyService } 'healthy service after launcher completion' 15)
 }
 
 function Quit-Product {
@@ -109,6 +142,7 @@ function Quit-Product {
   Require ($null -ne $info) 'No current service for quit'
   Invoke-RestMethod -Uri "http://127.0.0.1:$($info.port)/api/quit" -Method Post -Headers @{ Authorization = "Bearer $($info.token)" } -ContentType 'application/json' -Body '{}' -TimeoutSec 5 | Out-Null
   Wait-Until { -not (Get-Process -Id ([int]$info.pid) -ErrorAction SilentlyContinue) } 'service exit after quit' 20 | Out-Null
+  Wait-Until { @(Get-ProfileBrowsers).Count -eq 0 } 'product browser exit after quit' 15 | Out-Null
 }
 
 function Test-InstalledUi([string]$Subdirectory, [switch]$Persistence) {
@@ -120,6 +154,34 @@ function Test-InstalledUi([string]$Subdirectory, [switch]$Persistence) {
   if ($Persistence) { $arguments += '--verify-persistence' }
   & $nodePath @arguments
   Require ($LASTEXITCODE -eq 0) "Installed UI helper failed in $Subdirectory"
+}
+
+function Record-LiveProbes {
+  if (-not $LiveProbe -or -not $UiTest) { return }
+  $liveEvidence = Join-Path $Evidence 'unauthenticated-live'
+  New-Item -ItemType Directory -Path $liveEvidence -Force | Out-Null
+  try {
+    & $nodePath $UiTest --service-info $infoPath --evidence $liveEvidence --live-probe
+    $report.observations.Add([pscustomobject]@{ name = 'unauthenticated live platform probes'; helperExitCode = $LASTEXITCODE; affectsLifecycleVerdict = $false })
+  } catch {
+    $report.observations.Add([pscustomobject]@{ name = 'unauthenticated live platform probes'; error = $_.Exception.Message; affectsLifecycleVerdict = $false })
+  }
+}
+
+function Save-FailureDiagnostics {
+  $logRoot = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'Braintrust\logs'
+  foreach ($name in @('service.log', 'service.out.log', 'service.err.log')) {
+    $source = Join-Path $logRoot $name
+    if (-not (Test-Path -LiteralPath $source)) { continue }
+    try {
+      $content = (Get-Content -LiteralPath $source -Tail 600 -Encoding UTF8) -join "`r`n"
+      if ($script:currentInfo -and ([string]$script:currentInfo.token).Length -ge 8) { $content = $content.Replace([string]$script:currentInfo.token, '[REDACTED]') }
+      $content = $content -replace '(?i)(Bearer\s+)[A-Za-z0-9._~-]+', '$1[REDACTED]'
+      $content = $content -replace '(?i)("token"\s*:\s*")[^"]+("|$)', '$1[REDACTED]$2'
+      $content = $content -replace '[a-fA-F0-9]{48}', '[REDACTED]'
+      Set-Content -LiteralPath (Join-Path $Evidence ('diagnostic-' + $name)) -Value $content -Encoding UTF8
+    } catch {}
+  }
 }
 
 function Uninstall-Product {
@@ -173,13 +235,16 @@ try {
   Require ([string]$health.browser.version.Browser -like 'Edg/*') 'Standard Edge was not automatically discovered'
   if ($ExpectedVersion) { Require ($health.version -eq $ExpectedVersion) 'Running version differs from expected candidate' }
   Write-Check 'desktop shortcut and bundled runtime with automatic Edge discovery' $true ([string]$health.browser.version.Browser)
+  Record-LiveProbes
   Test-InstalledUi 'first-start'
   Write-Check 'installed workbench interaction and deterministic send' $true
 
   $firstPid = [int]$script:currentInfo.pid
-  $null = Start-DesktopProduct
+  $workbenchCount = Get-WorkbenchTargetCount $health
+  $health = Start-DesktopProduct
   Require ([int]$script:currentInfo.pid -eq $firstPid) 'Second shortcut invocation created another service'
   Require (@(Get-OwnedServers).Count -eq 1) 'Multiple installed service processes exist'
+  Require ((Get-WorkbenchTargetCount $health) -eq $workbenchCount) 'Repeat shortcut opened duplicate workbench tabs'
   Write-Check 'reopen uses existing service' $true
 
   Quit-Product
@@ -193,6 +258,7 @@ try {
   try {
     Install-Product
     Require (-not (Get-Process -Id $beforeUpgradePid -ErrorAction SilentlyContinue)) 'Running service survived installer upgrade'
+    Wait-Until { @(Get-ProfileBrowsers).Count -eq 0 } 'product browser exit during upgrade' 15 | Out-Null
     Require ((Get-Content -LiteralPath $sentinel -Raw) -eq $sentinelText) 'Upgrade changed user data sentinel'
     $health = Start-DesktopProduct
     Test-InstalledUi 'upgrade' -Persistence
@@ -208,6 +274,7 @@ try {
   $script:completedUninstall = $true
   Wait-Until { -not (Test-Path -LiteralPath $serverPath) -and -not (Test-Path -LiteralPath $nodePath) } 'uninstaller removes program payload' 10 | Out-Null
   foreach ($processId in $beforeUninstall) { Require (-not (Get-Process -Id $processId -ErrorAction SilentlyContinue)) 'Installed service survived uninstall' }
+  Wait-Until { @(Get-ProfileBrowsers).Count -eq 0 } 'product browser exit during uninstall' 15 | Out-Null
   Require (-not (Test-Path -LiteralPath $desktopShortcut)) 'Desktop shortcut survived uninstall'
   Require (-not (Test-Path -LiteralPath $startShortcut)) 'Start Menu shortcut survived uninstall'
   Require (-not (Test-Path -LiteralPath $uninstallRegistry)) 'Uninstall registry entry survived uninstall'
@@ -218,6 +285,8 @@ try {
 } catch {
   Write-Check 'lifecycle completion' $false $_.Exception.Message
   $report.failure = $_.Exception.Message
+  $report.failureStack = $_.ScriptStackTrace
+  Save-FailureDiagnostics
 } finally {
   if ($script:ownsTestInstallation) { Cleanup-Product }
   $report.finishedAt = [DateTime]::UtcNow.ToString('o')

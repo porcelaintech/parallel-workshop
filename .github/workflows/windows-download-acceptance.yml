@@ -15,7 +15,7 @@ permissions:
   contents: read
 
 env:
-  CANDIDATE_VERSION: '0.6.0-rc.2'
+  CANDIDATE_VERSION: '0.6.0-rc.2.A'
 
 jobs:
   build:
@@ -48,6 +48,7 @@ jobs:
         with:
           node-version: '22'
       - name: Browser download from current public site
+        id: public-download
         continue-on-error: true
         shell: powershell
         run: |
@@ -65,11 +66,26 @@ jobs:
           $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $file).Hash.ToLower()
           if ($hash -ne '5b25f75d70ce9c20c5aa11513048e47af475258b488f8cab5be6463229a5ac65') { throw 'Historical backup hash mismatch' }
           @{ url=$url; sha256=$hash; bytes=(Get-Item $file).Length } | ConvertTo-Json | Set-Content evidence\baseline-download.json -Encoding UTF8
+          $public = Join-Path $env:RUNNER_TEMP 'public-setup.exe'
+          if (Test-Path -LiteralPath $public) {
+            $publicHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $public).Hash.ToLower()
+            if ($publicHash -ne $hash) { throw 'Website installer differs from historical expected bytes; do not substitute another file' }
+            @{ sha256=$publicHash; bytes=(Get-Item $public).Length; source='actual website browser download' } | ConvertTo-Json | Set-Content evidence\public-file.json -Encoding UTF8
+          }
       - name: Published installer lifecycle and UI baseline
+        id: baseline
         continue-on-error: true
         shell: powershell
         run: |
-          & scripts\windows-installed-lifecycle-test.ps1 -Installer "$env:RUNNER_TEMP\baseline-setup.exe" -Evidence evidence\baseline -ExpectedVersion '0.6.0' -PublicBaseline -UiTest "$env:GITHUB_WORKSPACE\scripts\windows-installed-ui-test.mjs"
+          $file = Join-Path $env:RUNNER_TEMP 'public-setup.exe'
+          if (-not (Test-Path -LiteralPath $file)) { $file = Join-Path $env:RUNNER_TEMP 'baseline-setup.exe' }
+          & scripts\windows-installed-lifecycle-test.ps1 -Installer $file -Evidence evidence\baseline -ExpectedVersion '0.6.0' -PublicBaseline -UiTest "$env:GITHUB_WORKSPACE\scripts\windows-installed-ui-test.mjs"
+      - name: Enforce public acceptance result
+        if: always()
+        shell: powershell
+        run: |
+          if ('${{ steps.public-download.outcome }}' -ne 'success') { throw 'Official public download is blocked; backup testing cannot make it pass' }
+          if ('${{ steps.baseline.outcome }}' -ne 'success') { throw 'Published installer lifecycle has unresolved failures' }
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -116,7 +132,7 @@ jobs:
           else { Remove-Item Env:BRAINTRUST_BROWSER_HEADLESS -ErrorAction SilentlyContinue }
           Remove-Item Env:BRAINTRUST_BROWSER_PATH -ErrorAction SilentlyContinue
           $params = @{ Installer=(Resolve-Path "candidate\Braintrust-Setup-$env:CANDIDATE_VERSION.exe").Path; Evidence='evidence'; ExpectedVersion=$env:CANDIDATE_VERSION; UiTest="$env:GITHUB_WORKSPACE\scripts\windows-installed-ui-test.mjs" }
-          if ('${{ matrix.mode }}' -eq 'headed-unicode') { $params.InstallDirectory = Join-Path $env:RUNNER_TEMP '测试 用户\Braintrust App' }
+          if ('${{ matrix.mode }}' -eq 'headed-unicode') { $params.InstallDirectory = Join-Path $env:RUNNER_TEMP '测试 用户\Braintrust App'; $params.LiveProbe=$true }
           & scripts\windows-installed-lifecycle-test.ps1 @params
       - uses: actions/upload-artifact@v4
         if: always()

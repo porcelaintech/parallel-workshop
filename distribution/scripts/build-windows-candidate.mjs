@@ -8,8 +8,9 @@ const root = resolve(new URL('../..', import.meta.url).pathname);
 process.chdir(root);
 execFileSync('git', ['diff', '--exit-code']);
 execFileSync('git', ['diff', '--cached', '--exit-code']);
+if (execFileSync('git', ['status', '--porcelain', '--untracked-files=normal'], { encoding: 'utf8' }).trim()) throw new Error('Candidate requires a clean working tree including untracked source inputs');
 const sourceCommit = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
-const version = process.env.CANDIDATE_VERSION || '0.6.0-rc.2';
+const version = process.env.CANDIDATE_VERSION || '0.6.0-rc.2.A';
 const sourceVersion = JSON.parse(readFileSync('local-service/package.json')).version;
 if (!/^\d+\.\d+\.\d+-rc\.\d+(?:\.[A-Z]+)?$/.test(version) || version.split('-')[0] !== sourceVersion.split('-')[0]) {
   throw new Error('Candidate must retain the current three-part version and have a unique rc identifier');
