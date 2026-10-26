@@ -1,0 +1,73 @@
+name: Windows public download install flow
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [release/local-service]
+    paths:
+      - '.github/workflows/windows-public-install-e2e.yml'
+      - 'scripts/windows-verified-download-install-test.ps1'
+
+permissions:
+  contents: read
+
+jobs:
+  install:
+    runs-on: windows-2025
+    timeout-minutes: 10
+    env:
+      CI: 'true'
+      BRAINTRUST_NO_DIALOG: '1'
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+      - name: Click real Windows download link and retain Internet source marking
+        shell: powershell
+        run: |
+          $edge=Join-Path ${env:ProgramFiles(x86)} 'Microsoft\Edge\Application\msedge.exe'
+          node scripts/windows-installed-ui-test.mjs --download --browser $edge --output "$env:RUNNER_TEMP\public-setup.exe" --evidence evidence\download
+          if($LASTEXITCODE -ne 0){throw 'Official browser download failed'}
+      - name: Confirm known-file Run warning then complete actual installation wizard
+        shell: powershell
+        run: |
+          foreach($file in @('scripts\windows-verified-download-install-test.ps1','scripts\windows-installer-wizard-test.ps1')){
+            $tokens=$null;$errors=$null
+            [Management.Automation.Language.Parser]::ParseFile((Resolve-Path $file),[ref]$tokens,[ref]$errors)|Out-Null
+            if($errors.Count){throw ($errors|Out-String)}
+          }
+          & scripts\windows-verified-download-install-test.ps1 -Installer "$env:RUNNER_TEMP\public-setup.exe" -Evidence evidence\install
+      - name: Verify installed workbench after real downloaded file installation
+        shell: powershell
+        run: |
+          $root=Join-Path $env:LOCALAPPDATA 'Braintrust\service'
+          $info=Join-Path $env:LOCALAPPDATA 'Braintrust\data\service.json'
+          $ready=$false
+          for($i=0;$i -lt 120;$i++){
+            try{
+              $state=Get-Content $info -Raw | ConvertFrom-Json
+              $health=Invoke-RestMethod "http://127.0.0.1:$($state.port)/api/health" -Headers @{Authorization="Bearer $($state.token)"} -TimeoutSec 2
+              if($health.browser.version.Browser){$ready=$true;break}
+            }catch{}
+            Start-Sleep -Milliseconds 500
+          }
+          if(-not $ready){throw 'Real downloaded installer did not start workbench'}
+          & (Join-Path $root 'runtime\node-win-x64\node.exe') scripts\windows-installed-ui-test.mjs --service-info $info --evidence evidence\workbench
+          if($LASTEXITCODE -ne 0){throw 'Actual downloaded install workbench UI failed'}
+      - name: Stop only the installed VM service
+        if: always()
+        shell: powershell
+        run: |
+          $info=Join-Path $env:LOCALAPPDATA 'Braintrust\data\service.json'
+          if(Test-Path $info){
+            try{
+              $state=Get-Content $info -Raw | ConvertFrom-Json
+              Invoke-RestMethod "http://127.0.0.1:$($state.port)/api/quit" -Method Post -Headers @{Authorization="Bearer $($state.token)"} -ContentType 'application/json' -Body '{}' -TimeoutSec 5|Out-Null
+            }catch{}
+          }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: public-install-e2e-evidence
+          path: evidence/

@@ -1,0 +1,15 @@
+{
+  "productName": "智囊 · Braintrust",
+  "version": "0.6.0",
+  "updateManifest": "https://braintrust.chat/updates/local-service-update.json",
+  "browser": "auto",
+  "openBrowser": true,
+  "selectedPlatforms": [
+    "chatgpt",
+    "deepseek",
+    "doubao",
+    "kimi",
+    "tongyi",
+    "yiyan"
+  ]
+}

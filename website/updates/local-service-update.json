@@ -1,0 +1,15 @@
+{
+  "version": "0.6.0",
+  "publishedAt": "2026-10-25T07:56:06Z",
+  "notes": "智囊本地工作台 0.6.0 RC1",
+  "artifacts": {
+    "darwin-universal": {
+      "url": "https://braintrust-downloads-1738978343093082.oss-accelerate.aliyuncs.com/downloads/Braintrust-0.6.0.dmg",
+      "sha256": "22759b1cfa388519a05782c45bcc29946e5a40a69fa5652898237d5cd70541ed"
+    },
+    "win32-x64": {
+      "url": "https://braintrust-downloads-1738978343093082.oss-accelerate.aliyuncs.com/downloads/Braintrust-Setup-0.6.0.exe",
+      "sha256": "5b25f75d70ce9c20c5aa11513048e47af475258b488f8cab5be6463229a5ac65"
+    }
+  }
+}
