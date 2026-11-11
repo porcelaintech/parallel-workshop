@@ -71,7 +71,7 @@ try {
   if (Test-Path -LiteralPath 'HKCU:\Software\Braintrust') { throw 'An existing product installation is registered; use a fresh VM' }
   $wizard = Join-Path $PSScriptRoot 'windows-installer-wizard-test.ps1'
   if (-not (Test-Path -LiteralPath $wizard)) { throw 'Installer wizard helper missing' }
-  Add-Type -AssemblyName System.Windows.Forms,System.Drawing
+  Add-Type -AssemblyName System.Windows.Forms,System.Drawing,UIAutomationClient,UIAutomationTypes
   if (-not [Environment]::UserInteractive) { throw 'Interactive desktop unavailable; no warning can be acknowledged' }
   Add-Type -TypeDefinition @'
 using System;
@@ -165,7 +165,10 @@ try {
       if((Get-VerifiedHash) -ne $expectedHash) { throw 'Installer SHA changed before acknowledgment' }
       Save-Screen ('download-warning-before-run-' + ($report.runAcknowledgments + 1) + '.png')
       $report.runAcknowledgmentAttempted=$true
-      if(-not [BraintrustVerifiedDialog]::RunOnce($dialog.Handle,[uint32]$launcher.Id,$expectedName)) { throw 'Run acknowledgment did not complete within the bounded native message' }
+      $uiaButton = [System.Windows.Automation.AutomationElement]::FromHandle($run[0].Handle)
+      $invokePattern = $null
+      if (-not $uiaButton.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$invokePattern)) { throw 'Run button does not expose an InvokePattern' }
+      $invokePattern.Invoke()
       $acknowledgedHandles += [int64]$dialog.Handle
       $report.runAcknowledgments = $report.runAcknowledgments + 1
       $report.runAcknowledged=$true
