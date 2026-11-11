@@ -95,6 +95,7 @@ public static class BraintrustVerifiedDialog {
   [DllImport("user32.dll",CharSet=CharSet.Unicode)] private static extern int GetClassName(IntPtr window,StringBuilder value,int size);
   [DllImport("user32.dll",CharSet=CharSet.Unicode,ExactSpelling=true,EntryPoint="SendMessageTimeoutW")] private static extern IntPtr TextMessage(IntPtr window,uint message,UIntPtr count,StringBuilder value,uint flags,uint timeout,out UIntPtr result);
   [DllImport("user32.dll",EntryPoint="SendMessageTimeoutW",ExactSpelling=true)] private static extern IntPtr ValueMessage(IntPtr window,uint message,UIntPtr wParam,IntPtr lParam,uint flags,uint timeout,out UIntPtr result);
+  [DllImport("user32.dll")] private static extern int GetDlgCtrlID(IntPtr window);
   private static string Text(IntPtr window) {
     StringBuilder value=new StringBuilder(8192);UIntPtr result;
     if(TextMessage(window,0x000D,new UIntPtr(8192),value,3,100,out result)==IntPtr.Zero) return "";
@@ -126,9 +127,11 @@ public static class BraintrustVerifiedDialog {
         if(control.ClassName=="Button"&&control.Enabled&&control.Text.Replace("&","").Trim()=="Run")run=control;
       }
       if(!nameMatches||run==null)return false;
+      int ctrlId=GetDlgCtrlID(run.Handle);
+      if(ctrlId<=0)return false;
       UIntPtr result;
-      // BM_CLICK, with a bounded wait; no checkbox or alternate prompt is touched.
-      return ValueMessage(run.Handle,0x00F5,UIntPtr.Zero,IntPtr.Zero,3,3000,out result)!=IntPtr.Zero;
+      // WM_COMMAND with the exact "Run" button control id, as if the button sent BN_CLICKED.
+      return ValueMessage(dialog.Handle,0x0111,new UIntPtr((uint)ctrlId),run.Handle,3,3000,out result)!=IntPtr.Zero;
     }
     return false;
   }
@@ -165,10 +168,7 @@ try {
       if((Get-VerifiedHash) -ne $expectedHash) { throw 'Installer SHA changed before acknowledgment' }
       Save-Screen ('download-warning-before-run-' + ($report.runAcknowledgments + 1) + '.png')
       $report.runAcknowledgmentAttempted=$true
-      $uiaButton = [System.Windows.Automation.AutomationElement]::FromHandle($run[0].Handle)
-      $invokePattern = $null
-      if (-not $uiaButton.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$invokePattern)) { throw 'Run button does not expose an InvokePattern' }
-      $invokePattern.Invoke()
+      if(-not [BraintrustVerifiedDialog]::RunOnce($dialog.Handle,[uint32]$launcher.Id,$expectedName)) { throw 'Run acknowledgment did not complete within the bounded native message' }
       $acknowledgedHandles += [int64]$dialog.Handle
       $report.runAcknowledgments = $report.runAcknowledgments + 1
       $report.runAcknowledged=$true
