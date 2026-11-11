@@ -1,0 +1,79 @@
+name: Windows download package live test
+
+on:
+  workflow_dispatch:
+    inputs:
+      installer_url:
+        description: 'Public installer URL to download and test'
+        required: true
+        default: 'https://braintrust-downloads-1738978343093082.oss-accelerate.aliyuncs.com/downloads/Braintrust-Setup-0.6.0-rc.2.D.exe'
+      sha256:
+        description: 'Expected SHA-256 of the installer'
+        required: true
+        default: 'bd8c87a7fde773867f25861e509f5ea17bd84cbe5f9a25cc8f845776c9a706f6'
+      version:
+        description: 'Expected product version'
+        required: true
+        default: '0.6.0-rc.2.D'
+
+permissions:
+  contents: read
+
+jobs:
+  download-live:
+    runs-on: windows-2025
+    timeout-minutes: 20
+    env:
+      CI: 'true'
+      BRAINTRUST_NO_DIALOG: '1'
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+
+      - name: Download installer from official URL and verify SHA-256
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force evidence | Out-Null
+          $url = '${{ inputs.installer_url }}'
+          $expected = '${{ inputs.sha256 }}'.ToLower()
+          $file = Join-Path $env:RUNNER_TEMP 'Braintrust-setup.exe'
+          Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile $file -TimeoutSec 180
+          $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $file).Hash.ToLower()
+          if ($actual -ne $expected) { throw "SHA256 mismatch: got $actual expected $expected" }
+          @{ url=$url; sha256=$actual; bytes=(Get-Item $file).Length; version='${{ inputs.version }}' } | ConvertTo-Json | Set-Content 'evidence\download.json' -Encoding UTF8
+          Write-Host "downloaded $((Get-Item $file).Length) bytes, SHA256 OK"
+
+      - name: Installed lifecycle + workbench UI live test
+        shell: powershell
+        run: |
+          $file = Join-Path $env:RUNNER_TEMP 'Braintrust-setup.exe'
+          $params = @{
+            Installer = $file
+            Evidence = 'evidence'
+            ExpectedVersion = '${{ inputs.version }}'
+            UiTest = "$env:GITHUB_WORKSPACE\scripts\windows-installed-ui-test.mjs"
+          }
+          & scripts\windows-installed-lifecycle-test.ps1 @params
+
+      - name: Clean up exact VM installation
+        if: always()
+        shell: powershell
+        run: |
+          $root = Join-Path $env:LOCALAPPDATA 'Braintrust'
+          $stop = Join-Path $root 'service\stop.ps1'
+          if (Test-Path $stop) { & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $stop -ServiceRoot (Join-Path $root 'service') }
+          $un = Join-Path $root 'Uninstall.exe'
+          if (Test-Path $un) {
+            $copy = Join-Path $env:RUNNER_TEMP 'download-live-uninstall.exe'
+            Copy-Item $un $copy
+            $p = Start-Process $copy -ArgumentList ('/S _?=' + $root) -PassThru
+            if (-not $p.WaitForExit(30000)) { throw 'cleanup timeout' }
+          }
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-download-live-evidence
+          path: evidence/
