@@ -1,4 +1,4 @@
-﻿[CmdletBinding()]
+[CmdletBinding()]
 param(
   [Parameter(Mandatory = $true)][string]$Installer,
   [Parameter(Mandatory = $true)][string]$Evidence,
@@ -145,7 +145,7 @@ try {
   $process.WaitForExit()
   $process.Refresh()
   $report.installerExitCode = $process.ExitCode
-  if ($process.ExitCode -ne 0) { throw "Installer exited $($process.ExitCode)" }
+  if ($null -ne $process.ExitCode -and $process.ExitCode -ne 0) { throw "Installer exited $($process.ExitCode)" }
   if (-not $sawWindow -or -not $sawForward -or -not $sawFinish) { throw 'Installer did not complete the observed welcome/install/finish interaction' }
   if (-not (Test-Path -LiteralPath $server)) { throw 'Installer closed without creating the expected product files' }
   foreach ($relative in @('Uninstall.exe', 'service\launcher.vbs', 'service\runtime\node-win-x64\node.exe')) {
