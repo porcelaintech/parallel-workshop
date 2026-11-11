@@ -25,7 +25,7 @@ $report = [ordered]@{
   expectedSha256 = $expectedHash
   runAcknowledged = $false
   warningObservations = (New-Object System.Collections.Generic.List[object])
-  limitations = @('Only the ordinary Run button for this exact SHA-verified installer is acknowledged.', 'No checkbox, security setting, file download mark, SmartScreen window, or UAC prompt is changed.', 'This hosted Windows desktop test does not establish consumer Windows SmartScreen reputation.')
+  limitations = @('Up to two ordinary Run buttons for this exact SHA-verified installer are acknowledged (the two-stage unsigned-file warning).', 'No checkbox, security setting, file download mark, SmartScreen window, or UAC prompt is changed.', 'This hosted Windows desktop test does not establish consumer Windows SmartScreen reputation.')
 }
 $exitCode = 1
 
@@ -144,6 +144,8 @@ try {
   $launchScript=$launchScript.Replace('__INSTALLER__',(Quote-PS $Installer)).Replace('__RESULT__',(Quote-PS $launchResult))
   $launcher=Start-OwnedChild $launchScript 'download-launch'
   $report.launcherPid=$launcher.Id
+  $report.runAcknowledgments=0
+  $acknowledgedHandles=@()
   $launchDeadline=$started.AddSeconds(45)
   $launched=$null
   while([DateTime]::UtcNow -lt $launchDeadline) {
@@ -152,17 +154,20 @@ try {
     $dialogs=[BraintrustVerifiedDialog]::Windows([uint32]$launcher.Id)
     foreach($dialog in $dialogs) {
       $details=[ordered]@{title=$dialog.Title;ownerPid=$launcher.Id;controls=@($dialog.Controls | ForEach-Object { @{text=$_.Text;className=$_.ClassName;enabled=$_.Enabled} })}
-      if($report.warningObservations.Count -lt 3){$report.warningObservations.Add($details)}
+      if($report.warningObservations.Count -lt 8){$report.warningObservations.Add($details)}
       if($dialog.Title -cne 'Open File - Security Warning') { throw 'Unrecognized launcher-owned dialog; no button acknowledged' }
       $texts=($dialog.Controls | ForEach-Object {$_.Text}) -join "`n"
       if($texts.IndexOf($expectedName,[StringComparison]::OrdinalIgnoreCase) -lt 0) { throw 'Warning text does not identify the exact expected downloaded filename' }
       $run=@($dialog.Controls | Where-Object {$_.ClassName -ceq 'Button' -and $_.Enabled -and $_.Text.Replace('&','').Trim() -ceq 'Run'})
       if($run.Count -ne 1) { throw 'Exact Run button is absent or ambiguous; no button acknowledged' }
-      if($report.runAcknowledged) { continue }
+      if($acknowledgedHandles -contains ([int64]$dialog.Handle)) { continue }
+      if($report.runAcknowledgments -ge 2) { continue }
       if((Get-VerifiedHash) -ne $expectedHash) { throw 'Installer SHA changed before acknowledgment' }
-      Save-Screen 'download-warning-before-run.png'
+      Save-Screen ('download-warning-before-run-' + ($report.runAcknowledgments + 1) + '.png')
       $report.runAcknowledgmentAttempted=$true
       if(-not [BraintrustVerifiedDialog]::RunOnce($dialog.Handle,[uint32]$launcher.Id,$expectedName)) { throw 'Run acknowledgment did not complete within the bounded native message' }
+      $acknowledgedHandles += [int64]$dialog.Handle
+      $report.runAcknowledgments = $report.runAcknowledgments + 1
       $report.runAcknowledged=$true
       $report.runAcknowledgedAt=[DateTime]::UtcNow.ToString('o')
     }
