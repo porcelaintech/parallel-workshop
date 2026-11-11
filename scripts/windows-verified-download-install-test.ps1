@@ -1,4 +1,4 @@
-﻿[CmdletBinding()]
+[CmdletBinding()]
 param(
   [Parameter(Mandatory = $true)][string]$Installer,
   [Parameter(Mandatory = $true)][string]$Evidence
@@ -10,7 +10,7 @@ $started = [DateTime]::UtcNow
 $Installer = (Resolve-Path -LiteralPath $Installer).Path
 $Evidence = [IO.Path]::GetFullPath($Evidence)
 New-Item -ItemType Directory -Path $Evidence -Force | Out-Null
-$expectedHash = '5b25f75d70ce9c20c5aa11513048e47af475258b488f8cab5be6463229a5ac65'
+$expectedHash = 'bd8c87a7fde773867f25861e509f5ea17bd84cbe5f9a25cc8f845776c9a706f6'
 $expectedName = 'public-setup.exe'
 $children = New-Object System.Collections.Generic.List[object]
 $childTasks = @{}
