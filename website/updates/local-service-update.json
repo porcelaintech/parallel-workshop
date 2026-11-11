@@ -1,14 +1,14 @@
 {
   "version": "0.6.0-rc.2.D",
-  "publishedAt": "2026-11-11T10:54:00Z",
+  "publishedAt": "2026-11-11T11:04:00Z",
   "notes": "智囊本地工作台 0.6.0-rc.2.D（候选）",
   "artifacts": {
     "darwin-universal": {
-      "url": "https://github.com/porcelaintech/parallel-workshop/releases/download/v0.6.0-rc.2.D/Braintrust-0.6.0-rc.2.D.dmg",
+      "url": "https://braintrust-downloads-1738978343093082.oss-accelerate.aliyuncs.com/downloads/Braintrust-0.6.0-rc.2.D.dmg",
       "sha256": "29afa5fcc0429a87cf3241e9948de01f4f675655326562ba3bfb51c0b1e79f71"
     },
     "win32-x64": {
-      "url": "https://github.com/porcelaintech/parallel-workshop/releases/download/v0.6.0-rc.2.D/Braintrust-Setup-0.6.0-rc.2.D.exe",
+      "url": "https://braintrust-downloads-1738978343093082.oss-accelerate.aliyuncs.com/downloads/Braintrust-Setup-0.6.0-rc.2.D.exe",
       "sha256": "bd8c87a7fde773867f25861e509f5ea17bd84cbe5f9a25cc8f845776c9a706f6"
     }
   }
