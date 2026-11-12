@@ -1,5 +1,7 @@
 # 智囊 · Braintrust — Windows/Edge 版
 
+> **当前 Windows EXE 路线**：官网下载 EXE → 安装 → 桌面或开始菜单打开，不要求浏览器扩展或 Microsoft Store。安装包及验证状态见[分发说明](../distribution/README.md)和[2026-10-26 验证记录](../docs/windows-validation-2026-10-26.md)。以下是保留的 v0.4.1 Edge 扩展兼容通道文档。
+
 v0.4.1 是当前稳定版。
 
 > 本目录是 **Windows 产品入口**。macOS 用户请使用仓库根目录下 `macOS/` 目录（或直接执行 `install.sh`）。

@@ -2,39 +2,39 @@ import SwiftUI
 import WebKit
 import WorkbenchCore
 
-private typealias PanePalette = WorkbenchPalette
-
-/// 单个模型窗格视图：标题栏（平台名+状态+操作）+ WKWebView + 发送反馈提示。
+/// 单个模型窗格视图（2026 改版）：
+/// 40px 标题区（16 左边距 → 88 名称列 → 8 间距 → 状态文字 → 右侧「…」菜单）
+/// + 1px 分隔线 + 原生网页视口。
+/// 窗口 12px 圆角、1px 浅灰轮廓、无阴影；缩放/刷新/回到对话/放大收进「…」菜单。
 struct PaneView: View {
     @ObservedObject var controller: PaneController
     var focused: Bool
     var onToggleFocus: () -> Void
-    @State private var isHovered = false
 
     var body: some View {
         VStack(spacing: 0) {
             headerBar
             Rectangle()
-                .fill(PanePalette.graphite.opacity(0.13))
+                .fill(WorkbenchPalette.hairline)
                 .frame(height: 1)
                 .allowsHitTesting(false)
             ZStack(alignment: .topTrailing) {
-                // 保持 WKWebView 原始渲染树，不加 clip / blur / scale / transition。
+                // 保持 WKWebView 原始渲染树，不加 blur / scale / transition；仅裁下角圆角
                 WebViewRepresentable(webView: controller.webView)
+                    .clipShape(BottomRoundedRectangle(cornerRadius: 12))
 
                 if !controller.lastLog.isEmpty {
                     Label(controller.lastLog, systemImage: "checkmark.circle.fill")
-                        .font(.caption.weight(.medium))
+                        .font(WorkbenchFont.font(12))
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
-                        .background(PanePalette.warmWhite.opacity(0.96), in: Capsule())
+                        .background(WorkbenchPalette.surface.opacity(0.97), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                         .overlay(
-                            Capsule()
-                                .stroke(PanePalette.graphite.opacity(0.14))
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .stroke(WorkbenchPalette.hairline)
                                 .allowsHitTesting(false)
                         )
-                        .foregroundStyle(PanePalette.graphite)
-                        .shadow(color: PanePalette.graphite.opacity(0.08), radius: 5, y: 2)
+                        .foregroundStyle(WorkbenchPalette.textPrimary)
                         .padding(10)
                         .allowsHitTesting(false)
                         .transition(.move(edge: .top).combined(with: .opacity))
@@ -44,240 +44,152 @@ struct PaneView: View {
                 if controller.isDrifted {
                     Button(action: { controller.goHome() }) {
                         Label("回到对话", systemImage: "house.fill")
-                            .font(.caption.weight(.semibold))
+                            .font(WorkbenchFont.font(12, weight: .semibold))
                     }
-                    .buttonStyle(PaneAccentButtonStyle())
+                    .buttonStyle(PaneSoftButtonStyle())
                     .padding(10)
-                }
-
-                // 未登录引导（不拦截鼠标，仅提示）
-                if controller.status == .loggedOut {
-                    VStack {
-                        Spacer()
-                        Label("在此窗格内登录，放大后操作更方便", systemImage: "person.crop.circle.badge.exclamationmark")
-                            .font(.caption.weight(.medium))
-                            .foregroundStyle(PanePalette.graphite.opacity(0.68))
-                            .padding(.horizontal, 11)
-                            .padding(.vertical, 7)
-                            .background(PanePalette.warmWhite.opacity(0.96), in: Capsule())
-                            .overlay(
-                                Capsule()
-                                    .stroke(PanePalette.sage.opacity(0.24))
-                                    .allowsHitTesting(false)
-                            )
-                            .shadow(color: PanePalette.graphite.opacity(0.06), radius: 5, y: 2)
-                            .padding(10)
-                            .allowsHitTesting(false)
-                    }
                 }
             }
         }
         .background(
-            RoundedRectangle(cornerRadius: 15, style: .continuous)
-                .fill(PanePalette.warmWhite)
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(WorkbenchPalette.surface)
                 .allowsHitTesting(false)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 15, style: .continuous)
-                .stroke(
-                    focused ? PanePalette.sage.opacity(0.78) : PanePalette.graphite.opacity(isHovered ? 0.22 : 0.14),
-                    lineWidth: focused ? 1.6 : 1
-                )
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(WorkbenchPalette.hairline, lineWidth: 1)
                 .allowsHitTesting(false)
         )
-        .shadow(
-            color: focused ? PanePalette.sage.opacity(0.1) : PanePalette.graphite.opacity(isHovered ? 0.065 : 0.035),
-            radius: focused ? 7 : (isHovered ? 6 : 4),
-            y: isHovered ? 3 : 2
-        )
-        .animation(.easeOut(duration: 0.18), value: focused)
-        .animation(.easeOut(duration: 0.18), value: isHovered)
-        .onHover { isHovered = $0 }
     }
 
     private var headerBar: some View {
-        HStack(spacing: 7) {
-            ZStack {
-                Circle()
-                    .fill(badgeColor.opacity(0.12))
-                    .allowsHitTesting(false)
-                Text(String(controller.adapter.name.prefix(1)))
-                    .font(.system(size: 10, weight: .bold, design: .rounded))
-                    .foregroundStyle(badgeColor)
-                    .allowsHitTesting(false)
-            }
-            .frame(width: 23, height: 23)
-            .overlay(
-                Circle()
-                    .stroke(badgeColor.opacity(0.18))
-                    .allowsHitTesting(false)
-            )
-
+        HStack(spacing: 8) {
             Text(controller.adapter.name)
-                .font(.system(size: 12.5, weight: .semibold))
-                .foregroundStyle(PanePalette.graphite)
+                .font(WorkbenchFont.font(14, weight: .semibold))
+                .foregroundStyle(WorkbenchPalette.textPrimary)
+                .lineLimit(1)
+                .frame(width: 88, alignment: .leading)
+                .accessibilityIdentifier("pane.name")
 
-            statusBadge
-
-            Spacer()
-
-            // 缩放控制（解决平台界面宽于窗格的裁切）
-            HStack(spacing: 1) {
-                Button(action: { controller.zoomOut() }) {
-                    Image(systemName: "minus.magnifyingglass")
-                }
-                .buttonStyle(PaneIconButtonStyle())
-                .help("缩小页面（适应窗格宽度）")
-
-                Button(action: { controller.resetZoom() }) {
-                    Text("\(Int((controller.zoom * 100).rounded()))%")
-                        .font(.caption2.weight(.medium))
-                        .foregroundStyle(PanePalette.graphite.opacity(0.62))
-                        .monospacedDigit()
-                        .frame(minWidth: 36)
-                }
-                .buttonStyle(PaneZoomButtonStyle())
-                .help("点击恢复 100%")
-
-                Button(action: { controller.zoomIn() }) {
-                    Image(systemName: "plus.magnifyingglass")
-                }
-                .buttonStyle(PaneIconButtonStyle())
-                .help("放大页面")
-            }
-            .padding(2)
-            .background(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(PanePalette.graphite.opacity(0.035))
-                    .allowsHitTesting(false)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .stroke(PanePalette.graphite.opacity(0.12))
-                    .allowsHitTesting(false)
-            )
-
-            Button(action: onToggleFocus) {
-                Image(systemName: focused
-                      ? "arrow.down.right.and.arrow.up.left"
-                      : "arrow.up.left.and.arrow.down.right")
-            }
-            .buttonStyle(PaneIconButtonStyle(tint: focused ? PanePalette.sage : PanePalette.graphite.opacity(0.62), selected: focused))
-            .help(focused ? "退出放大" : "放大此窗口（登录/阅读）")
-
-            if controller.status != .ready {
-                Button(action: { controller.reload() }) {
-                    Image(systemName: "arrow.clockwise")
-                }
-                .buttonStyle(PaneIconButtonStyle(tint: PanePalette.graphite.opacity(0.62)))
-                .help("重新加载该窗口")
-            }
-        }
-        .padding(.leading, 9)
-        .padding(.trailing, 7)
-        .padding(.vertical, 6)
-        .background(PanePalette.warmWhite.opacity(0.98))
-    }
-
-    private var statusBadge: some View {
-        HStack(spacing: 4) {
-            Circle()
-                .fill(badgeColor)
-                .frame(width: 5, height: 5)
             Text(controller.statusLabel)
+                .font(WorkbenchFont.font(12))
+                .foregroundStyle(WorkbenchPalette.textSecondary)
+                .lineLimit(1)
+                .accessibilityIdentifier("pane.status")
+
+            Spacer(minLength: 0)
+
+            paneMenu
         }
-        .font(.caption2.weight(.medium))
-        .padding(.horizontal, 7)
-        .padding(.vertical, 3)
-        .background(badgeColor.opacity(0.1), in: Capsule())
-        .foregroundStyle(badgeColor)
-        .overlay(
-            Capsule()
-                .stroke(badgeColor.opacity(0.16))
-                .allowsHitTesting(false)
-        )
+        .padding(.leading, 16)
+        .padding(.trailing, 8)
+        .frame(height: 40)
+        .background(WorkbenchPalette.surface)
     }
 
-    private var badgeColor: Color {
-        switch controller.status {
-        case .loading: return PanePalette.graphite.opacity(0.48)
-        case .ready: return PanePalette.sage
-        case .loggedOut: return PanePalette.sage.opacity(0.72)
-        case .challenge: return PanePalette.graphite.opacity(0.9)
-        case .inputMissing: return PanePalette.graphite.opacity(0.7)
-        case .unreachable: return PanePalette.graphite
+    /// 各列「…」菜单：独立缩放 / 恢复 100% / 放大窗口 / 重新加载 / 回到对话。
+    private var paneMenu: some View {
+        Menu {
+            Text("缩放 \(Int((controller.zoom * 100).rounded()))%")
+                .font(WorkbenchFont.font(13))
+            Button {
+                controller.zoomOut()
+            } label: {
+                Label("缩小", systemImage: "minus.magnifyingglass")
+            }
+            Button {
+                controller.zoomIn()
+            } label: {
+                Label("放大", systemImage: "plus.magnifyingglass")
+            }
+            Button {
+                controller.resetZoom()
+            } label: {
+                Text("恢复 100%")
+            }
+            .disabled(abs(controller.zoom - 1.0) < 0.001)
+            Divider()
+            Button {
+                onToggleFocus()
+            } label: {
+                Label(focused ? "退出放大" : "放大此窗口",
+                      systemImage: focused ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
+            }
+            Divider()
+            Button {
+                controller.reload()
+            } label: {
+                Label("重新加载", systemImage: "arrow.clockwise")
+            }
+            if controller.isDrifted {
+                Button {
+                    controller.goHome()
+                } label: {
+                    Label("回到对话", systemImage: "house.fill")
+                }
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(WorkbenchPalette.textPrimary)
+                .frame(width: 32, height: 32)
+                .contentShape(Rectangle())
         }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .frame(width: 32, height: 32)
+        .accessibilityIdentifier("pane.menu")
+        .help("缩放、放大与更多操作")
     }
 }
 
-private struct PaneIconButtonStyle: ButtonStyle {
-    var tint: Color = PanePalette.graphite.opacity(0.62)
-    var selected = false
+/// 仅下角圆角（标题区为直角，网页视口贴合 12px 窗口圆角，不产生双圆角）。
+private struct BottomRoundedRectangle: Shape {
+    var cornerRadius: CGFloat
 
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let r = cornerRadius
+        path.move(to: CGPoint(x: rect.minX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - r))
+        path.addArc(center: CGPoint(x: rect.maxX - r, y: rect.maxY - r), radius: r,
+                    startAngle: .degrees(0), endAngle: .degrees(90), clockwise: false)
+        path.addLine(to: CGPoint(x: rect.minX + r, y: rect.maxY))
+        path.addArc(center: CGPoint(x: rect.minX + r, y: rect.maxY - r), radius: r,
+                    startAngle: .degrees(90), endAngle: .degrees(180), clockwise: false)
+        path.closeSubpath()
+        return path
+    }
+}
+
+/// 窗格内软按钮（「回到对话」）：白底 + 1px 发丝线，低强调。
+private struct PaneSoftButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
-        PaneIconButtonBody(configuration: configuration, tint: tint, selected: selected)
+        PaneSoftButtonBody(configuration: configuration)
     }
 }
 
-private struct PaneIconButtonBody: View {
+private struct PaneSoftButtonBody: View {
     let configuration: ButtonStyle.Configuration
-    let tint: Color
-    let selected: Bool
-    @Environment(\.isEnabled) private var isEnabled
-    @State private var isHovered = false
+    @State private var hovered = false
 
     var body: some View {
         configuration.label
-            .font(.system(size: 11.5, weight: .semibold))
-            .foregroundStyle(tint)
-            .frame(width: 27, height: 25)
-            .background(
-                selected ? tint.opacity(0.15) : PanePalette.graphite.opacity(isHovered ? 0.065 : 0),
-                in: RoundedRectangle(cornerRadius: 7, style: .continuous)
-            )
+            .foregroundStyle(WorkbenchPalette.textPrimary)
+            .padding(.horizontal, 10)
+            .frame(height: 28)
+            .background(WorkbenchPalette.surface.opacity(0.97), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .stroke(selected ? tint.opacity(0.2) : Color.clear)
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(hovered ? WorkbenchPalette.inputBorder : WorkbenchPalette.hairline)
                     .allowsHitTesting(false)
             )
-            .scaleEffect(configuration.isPressed ? 0.9 : 1)
-            .opacity(isEnabled ? 1 : 0.38)
-            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
-            .animation(.easeOut(duration: 0.15), value: isHovered)
-            .onHover { isHovered = $0 }
-    }
-}
-
-private struct PaneZoomButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .padding(.vertical, 4)
-            .contentShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
-            .background(PanePalette.graphite.opacity(configuration.isPressed ? 0.07 : 0), in: RoundedRectangle(cornerRadius: 5, style: .continuous))
             .scaleEffect(configuration.isPressed ? 0.96 : 1)
-    }
-}
-
-private struct PaneAccentButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        PaneAccentButtonBody(configuration: configuration)
-    }
-}
-
-private struct PaneAccentButtonBody: View {
-    let configuration: ButtonStyle.Configuration
-    @State private var isHovered = false
-
-    var body: some View {
-        configuration.label
-            .foregroundStyle(PanePalette.warmWhite)
-            .padding(.horizontal, 11)
-            .frame(height: 30)
-            .background(PanePalette.sage.opacity(isHovered ? 1 : 0.92), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-            .scaleEffect(configuration.isPressed ? 0.95 : 1)
-            .animation(.easeOut(duration: 0.13), value: configuration.isPressed)
-            .animation(.easeOut(duration: 0.15), value: isHovered)
-            .onHover { isHovered = $0 }
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+            .animation(.easeOut(duration: 0.12), value: hovered)
+            .onHover { hovered = $0 }
     }
 }
 

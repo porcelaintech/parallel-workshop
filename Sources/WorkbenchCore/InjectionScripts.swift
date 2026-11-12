@@ -6,6 +6,7 @@ public enum InjectionScripts {
     public static let injectJS: String = load("inject")
     public static let probeJS: String = load("probe")
     public static let modelPreferenceJS: String = load("model-preference")
+    public static let pageThemeJS: String = load("theme")
 
     private static func load(_ name: String) -> String {
         let url = Resources.root().appendingPathComponent("injection/\(name).js")

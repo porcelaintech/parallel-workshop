@@ -111,12 +111,12 @@ final class WorkbenchModel: ObservableObject {
         enabledPanes.count > Self.maxVisiblePanes
     }
 
-    /// 分页指示，如 "1-3 / 5"
+    /// 分页指示，如 "显示 2–4 / 4"（中文“显示”宋体，数字与分隔符 Helvetica）
     var pageIndicator: String {
         let list = enabledPanes
         guard needsPaging else { return "" }
         let start = min(windowStart, max(list.count - Self.maxVisiblePanes, 0))
-        return "\(start + 1)-\(min(start + Self.maxVisiblePanes, list.count)) / \(list.count)"
+        return "显示 \(start + 1)–\(min(start + Self.maxVisiblePanes, list.count)) / \(list.count)"
     }
 
     func pageBackward() {

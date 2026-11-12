@@ -1,15 +1,11 @@
 import SwiftUI
 import AppKit
+import CoreGraphics
 import WorkbenchCore
 
-enum WorkbenchPalette {
-    static let warmWhite = Color(red: 247.0 / 255.0, green: 245.0 / 255.0, blue: 240.0 / 255.0)
-    static let graphite = Color(red: 37.0 / 255.0, green: 42.0 / 255.0, blue: 46.0 / 255.0)
-    static let sage = Color(red: 126.0 / 255.0, green: 146.0 / 255.0, blue: 131.0 / 255.0)
-}
-
-private typealias ContentPalette = WorkbenchPalette
-
+/// 智囊工作台主界面（2026 改版）：
+/// 品牌行（32）→ 统一输入区（默认 96，随多行输入增长至 192）→ 模型勾选与分页行（32）→ 三列窗口。
+/// 页面左右边距 24，三列窗口间距 16，底部边距 24；纵向正常流式布局。
 struct ContentView: View {
     @StateObject private var model = WorkbenchModel()
     @EnvironmentObject private var updates: UpdateCoordinator
@@ -17,20 +13,31 @@ struct ContentView: View {
     @FocusState private var inputFocused: Bool
     @State private var showFilePicker = false
     @State private var questionBaseline = ""
+    @State private var dropHover = false
 
     var body: some View {
         ZStack {
-            ContentPalette.warmWhite
+            WorkbenchPalette.pageBackground
                 .ignoresSafeArea()
 
             VStack(spacing: 0) {
-                topBar
+                brandRow
+                    .padding(.top, 8)
+                    .frame(height: 40)
+                inputCard
+                    .padding(.top, 8)
+                modelRow
+                    .padding(.top, 8)
+                    .frame(height: 40)
                 paneRow
+                    .padding(.top, 12)
+                    .padding(.bottom, 24)
             }
+            .padding(.horizontal, WorkbenchLayout.pageMargin)
         }
         .frame(minWidth: 1280, minHeight: 760)
-        .foregroundStyle(ContentPalette.graphite)
-        .tint(ContentPalette.sage)
+        .foregroundStyle(WorkbenchPalette.textPrimary)
+        .tint(WorkbenchPalette.checkboxSelected)
         .onAppear {
             // 裸可执行文件启动的 GUI 应用：显式常规激活策略 + 激活，否则窗口收不到键盘输入
             NSApp.setActivationPolicy(.regular)
@@ -40,6 +47,47 @@ struct ContentView: View {
                 inputFocused = true
             }
             updates.startAutomaticChecks()
+            print("字体资源: \(WorkbenchFont.availabilityReport)")
+            // 窗口钳制：屏幕小于参考画布（2048×1325）时收敛到可见区域，
+            // 避免右侧按钮/分页被切出屏幕造成“没对齐”的观感。
+            if let window = NSApp.windows.first, let screen = window.screen ?? NSScreen.main {
+                let vf = screen.visibleFrame
+                var frame = window.frame
+                if frame.width > vf.width || frame.height > vf.height {
+                    frame.size.width = min(frame.width, vf.width)
+                    frame.size.height = min(frame.height, vf.height)
+                    frame.origin = NSPoint(x: vf.minX, y: vf.minY)
+                    window.setFrame(frame, display: true)
+                }
+            }
+            // 验收/测试钩子：WB_FRAME="x,y,w,h" 显式设定窗口位置与尺寸（未设置则用默认尺寸）
+            if let spec = ProcessInfo.processInfo.environment["WB_FRAME"] {
+                let parts = spec.split(separator: ",").compactMap { Double($0.trimmingCharacters(in: .whitespaces)) }
+                if parts.count == 4 {
+                    let rect = NSRect(x: parts[0], y: parts[1], width: parts[2], height: parts[3])
+                    NSApp.windows.first?.setFrame(rect, display: true)
+                }
+            }
+            // 验收/测试钩子：WB_PAGE="N" 定位到第 N 页窗口（用于逐页取证）
+            if let pageSpec = ProcessInfo.processInfo.environment["WB_PAGE"],
+               let page = Int(pageSpec.trimmingCharacters(in: .whitespaces)), page >= 0 {
+                model.windowStart = page
+            }
+            // 验收/测试钩子：WB_QUESTION 预填多行问题（\\n 换行）、WB_ATTACH 预加附件（验证布局）
+            if let q = ProcessInfo.processInfo.environment["WB_QUESTION"] {
+                model.question = q.replacingOccurrences(of: "\\n", with: "\n")
+            }
+            if let attachSpec = ProcessInfo.processInfo.environment["WB_ATTACH"] {
+                let urls = attachSpec.split(separator: ":").map { URL(fileURLWithPath: String($0)) }
+                model.addAttachment(urls: urls)
+            }
+            // 验收/测试钩子：WB_SHOT="输出.png" 延迟几秒后抓取本应用窗口（含标题栏）存 PNG
+            if let shotPath = ProcessInfo.processInfo.environment["WB_SHOT"] {
+                let delay = ProcessInfo.processInfo.environment["WB_SHOT_DELAY"].flatMap(Double.init) ?? 6
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                    ContentView.captureWindowShot(to: shotPath)
+                }
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             updates.checkOnActivation()
@@ -58,10 +106,13 @@ struct ContentView: View {
                 model.addAttachment(urls: urls)
             }
         }
-        // 拖入文件 → 附件；粘贴图片 → 附件
+        // 拖入文件 → 附件；拖动悬停时显示状态提示（替代常驻说明文字）
         .dropDestination(for: URL.self) { urls, _ in
+            dropHover = false
             model.addAttachment(urls: urls)
             return true
+        } isTargeted: { targeted in
+            dropHover = targeted
         }
         .onPasteCommand(of: [.image]) { providers in
             for provider in providers {
@@ -76,307 +127,384 @@ struct ContentView: View {
         }
     }
 
-    private var topBar: some View {
-        VStack(spacing: 10) {
-            HStack(spacing: 10) {
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("智囊")
-                        .font(.system(size: 22, weight: .semibold))
-                        .tracking(3)
-                    Text("BRAINTRUST")
-                        .font(.system(size: 9, weight: .medium))
-                        .tracking(1.7)
-                        .foregroundStyle(ContentPalette.graphite.opacity(0.58))
-                }
+    // MARK: - 品牌与全局设置行（高 32，标题左侧与页面主对齐线 x=24 对齐）
 
-                Spacer()
+    private var brandRow: some View {
+        HStack(spacing: 0) {
+            Text("智囊")
+                .font(WorkbenchFont.font(24, weight: .semibold))
+                .foregroundStyle(WorkbenchPalette.textPrimary)
+                .frame(height: 28)
+                .accessibilityIdentifier("workbench.brand")
 
-                Text("v\(updates.currentVersion)")
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(ContentPalette.graphite.opacity(0.62))
-                Button(action: { updates.primaryAction() }) {
-                    Label(updates.buttonTitle, systemImage: "arrow.down.circle")
-                        .font(.system(size: 13, weight: .semibold))
-                }
-                .buttonStyle(WorkbenchSoftButtonStyle(tint: ContentPalette.sage,
-                                                     emphasized: updates.availableVersion != nil))
-                .disabled(updates.isBusy || model.sending)
-                .fixedSize()
-                .accessibilityIdentifier("workbench.update")
-                .help("检查 GitHub 最新版本；发现新版后点击即可安装并重启")
+            Spacer()
 
-                Label("⌘↩ 发送", systemImage: "command")
-                    .font(.caption2.weight(.medium))
-                    .foregroundStyle(ContentPalette.graphite.opacity(0.62))
-                    .padding(.horizontal, 9)
-                    .padding(.vertical, 5)
-                    .background(ContentPalette.graphite.opacity(0.035), in: Capsule())
-                    .overlay(
-                        Capsule()
-                            .stroke(ContentPalette.graphite.opacity(0.12))
-                            .allowsHitTesting(false)
-                    )
-            }
-
-            if !updates.message.isEmpty {
-                HStack {
-                    Text(updates.message)
-                        .font(.caption)
-                        .foregroundStyle(ContentPalette.graphite.opacity(0.75))
-                        .accessibilityIdentifier("workbench.update.status")
-                    Spacer(minLength: 0)
-                    if updates.phase == .failed {
-                        Button("重试") { updates.primaryAction() }
-                            .buttonStyle(WorkbenchTextButtonStyle())
-                        Button("前往下载页") {
-                            NSWorkspace.shared.open(Updater.releasePageURL)
-                        }
-                        .buttonStyle(WorkbenchTextButtonStyle())
-                    }
-                }
-            }
-
-            // 主战场：大输入框 + 大发送按钮
-            HStack(spacing: 10) {
-                TextField("输入问题（Enter 换行，⌘↩ 或点「发送」同步到所有勾选的模型）", text: $model.question, axis: .vertical)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 16, weight: .regular))
-                    .foregroundStyle(ContentPalette.graphite)
-                    .lineLimit(2...4)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 11)
-                    .background(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .fill(ContentPalette.warmWhite)
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .stroke(
-                                inputFocused ? ContentPalette.sage.opacity(0.82) : ContentPalette.graphite.opacity(0.18),
-                                lineWidth: inputFocused ? 1.5 : 1
-                            )
-                            .allowsHitTesting(false)
-                    )
-                    .shadow(
-                        color: inputFocused ? ContentPalette.sage.opacity(0.13) : ContentPalette.graphite.opacity(0),
-                        radius: inputFocused ? 5 : 0
-                    )
-                    .focused($inputFocused)
-                    .animation(.easeOut(duration: 0.16), value: inputFocused)
-
-                Button(action: { voice.toggle() }) {
-                    Image(systemName: voice.isRecording ? "stop.fill" : "mic.fill")
-                        .font(.system(size: 16, weight: .semibold))
-                }
-                .buttonStyle(WorkbenchIconButtonStyle(tint: ContentPalette.sage, selected: voice.isRecording))
-                .help(voice.isRecording ? "停止录音" : "语音输入（点击开始，再次点击结束）")
-
-                Button(action: { model.send() }) {
-                    Label("发送", systemImage: "paperplane.fill")
-                        .font(.system(size: 15, weight: .semibold))
-                }
-                .buttonStyle(WorkbenchPrimaryButtonStyle())
-                .keyboardShortcut(.return, modifiers: [.command])
-                .help("发送到所有勾选的模型（⌘↩）")
-                .disabled(model.sending ||
-                          (model.question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && model.attachments.isEmpty))
-            }
-
-            // 语音状态提示
-            if !voice.statusText.isEmpty {
-                HStack {
-                    statusPill(
-                        voice.statusText,
-                        color: voice.isRecording ? ContentPalette.sage : ContentPalette.graphite,
-                        systemImage: voice.isRecording ? "waveform" : "mic"
-                    )
-                    Spacer()
-                }
-            }
-
-            // 附件栏：已选附件 chips + 添加/拖放/粘贴
-            if !model.attachments.isEmpty || true {
-                HStack(spacing: 8) {
-                    Button(action: { showFilePicker = true }) {
-                        Label("附件", systemImage: "paperclip")
-                            .font(.caption.weight(.medium))
-                    }
-                    .buttonStyle(WorkbenchSoftButtonStyle(tint: ContentPalette.sage))
-
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 6) {
-                            ForEach(model.attachments) { att in
-                                HStack(spacing: 5) {
-                                    Image(systemName: "doc.fill")
-                                        .font(.caption2)
-                                        .foregroundStyle(ContentPalette.sage)
-                                    Text(att.name)
-                                        .font(.caption.weight(.medium))
-                                        .lineLimit(1)
-                                    Text(formatBytes(att.size))
-                                        .font(.caption2)
-                                        .foregroundStyle(ContentPalette.graphite.opacity(0.58))
-                                    Button(action: { model.removeAttachment(id: att.id) }) {
-                                        Image(systemName: "xmark.circle.fill")
-                                            .font(.caption)
-                                    }
-                                    .buttonStyle(.borderless)
-                                    .foregroundStyle(ContentPalette.graphite.opacity(0.55))
-                                    .help("移除 \(att.name)")
-                                }
-                                .padding(.leading, 9)
-                                .padding(.trailing, 6)
-                                .padding(.vertical, 5)
-                                .background(ContentPalette.sage.opacity(0.09), in: Capsule())
-                                .overlay(
-                                    Capsule()
-                                        .stroke(ContentPalette.sage.opacity(0.2))
-                                        .allowsHitTesting(false)
-                                )
-                            }
-                        }
-                    }
-
-                    Spacer(minLength: 6)
-
-                    Text("可拖入文件 / 图片，或 ⌘V 粘贴图片")
-                        .font(.caption2)
-                        .foregroundStyle(ContentPalette.graphite.opacity(0.5))
-                        .fixedSize()
-                }
-            }
-
-            // 控制行：平台勾选（= 参与显示与发送）+ 分页 + 状态
-            HStack(spacing: 9) {
-                ForEach(model.panes, id: \.adapter.id) { pane in
-                    Toggle(pane.adapter.name, isOn: model.binding(for: pane.adapter.id))
-                        .toggleStyle(WorkbenchPlatformToggleStyle())
-                        .fixedSize()
-                }
-
-                if model.needsPaging {
-                    HStack(spacing: 3) {
-                        Button(action: { model.pageBackward() }) {
-                            Image(systemName: "chevron.left")
-                        }
-                        .buttonStyle(WorkbenchMiniIconButtonStyle())
-                        .disabled(model.windowStart == 0)
-                        .help("上一页窗格")
-
-                        Text(model.pageIndicator)
-                            .font(.caption.weight(.medium))
-                            .foregroundStyle(ContentPalette.graphite.opacity(0.62))
-                            .monospacedDigit()
-                            .frame(minWidth: 30)
-
-                        Button(action: { model.pageForward() }) {
-                            Image(systemName: "chevron.right")
-                        }
-                        .buttonStyle(WorkbenchMiniIconButtonStyle())
-                        .disabled(model.windowStart >= model.enabledPanes.count - WorkbenchModel.maxVisiblePanes)
-                        .help("下一页窗格")
-                    }
-                    .padding(3)
-                    .background(ContentPalette.graphite.opacity(0.035), in: Capsule())
-                    .overlay(
-                        Capsule()
-                            .stroke(ContentPalette.graphite.opacity(0.12))
-                            .allowsHitTesting(false)
-                    )
-                }
-
-                if let f = model.focusedID {
-                    Button(action: { model.toggleFocus(f) }) {
-                        Label("退出放大", systemImage: "arrow.down.right.and.arrow.up.left")
-                            .font(.caption.weight(.medium))
-                    }
-                    .buttonStyle(WorkbenchSoftButtonStyle(tint: ContentPalette.sage))
-                }
-
-                Spacer(minLength: 8)
-
-                if !model.loginProgress.isEmpty {
-                    statusPill(model.loginProgress, color: ContentPalette.sage, systemImage: "person.crop.circle.badge.clock")
-                }
-                if !model.statusText.isEmpty {
-                    statusPill(model.statusText, color: ContentPalette.graphite, systemImage: "info.circle")
-                }
-            }
+            globalMenu
         }
-        .padding(.horizontal, 14)
-        .padding(.top, 10)
-        .padding(.bottom, 11)
-        .background(ContentPalette.warmWhite.opacity(0.98))
-        .overlay(alignment: .bottom) {
-            Rectangle()
-                .fill(ContentPalette.graphite.opacity(0.13))
-                .frame(height: 1)
-                .allowsHitTesting(false)
-        }
-        .zIndex(1)
+        .frame(height: 32)
     }
+
+    /// 全局设置「…」菜单：版本号、检查更新、关于全部收进这里。
+    private var globalMenu: some View {
+        Menu {
+            if !updates.message.isEmpty {
+                Text(updates.message)
+                    .font(WorkbenchFont.font(13))
+                    .accessibilityIdentifier("workbench.update.status")
+                Divider()
+            }
+            Text("版本 v\(updates.currentVersion)")
+                .font(WorkbenchFont.font(13))
+            Divider()
+            Button {
+                updates.manualCheck()
+            } label: {
+                Text("检查更新").font(WorkbenchFont.font(13))
+            }
+            .disabled(updates.isBusy)
+            if let version = updates.availableVersion {
+                Button {
+                    updates.primaryAction()
+                } label: {
+                    Text("安装 v\(version)").font(WorkbenchFont.font(13))
+                }
+            }
+            if updates.phase == .failed {
+                Button {
+                    updates.primaryAction()
+                } label: {
+                    Text("重试").font(WorkbenchFont.font(13))
+                }
+                Button {
+                    NSWorkspace.shared.open(Updater.releasePageURL)
+                } label: {
+                    Text("前往下载页").font(WorkbenchFont.font(13))
+                }
+            }
+            Divider()
+            Button {
+                showAbout()
+            } label: {
+                Text("关于智囊").font(WorkbenchFont.font(13))
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(WorkbenchPalette.textPrimary)
+                .frame(width: 32, height: 32)
+                .contentShape(Rectangle())
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .frame(width: 32, height: 32)
+        .accessibilityIdentifier("workbench.menu")
+        .help("版本、检查更新与关于")
+    }
+
+    private func showAbout() {
+        let options: [NSApplication.AboutPanelOptionKey: Any] = [
+            .applicationName: "智囊",
+            .applicationVersion: updates.currentVersion
+        ]
+        NSApp.orderFrontStandardAboutPanel(options: options)
+    }
+
+    // MARK: - 统一输入区（默认 96 高，随文字增长最高约 192）
+
+    private var inputCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            inputField
+            inputControlsRow
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 12)
+        .padding(.bottom, 12)
+        .background(WorkbenchPalette.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(inputFocused ? WorkbenchPalette.checkboxSelected : WorkbenchPalette.inputBorder,
+                        lineWidth: inputFocused ? 2 : 1)
+                .allowsHitTesting(false)
+        )
+        .overlay {
+            if dropHover { dropOverlay }
+        }
+        .animation(.easeOut(duration: 0.15), value: inputFocused)
+        .animation(.easeOut(duration: 0.12), value: dropHover)
+    }
+
+    /// 文字输入：16px/行高 24；默认 32 高，随内容最多增长到 128，更多内容在区域内滚动。
+    /// fixedSize(vertical: true) 让高度严格跟随内容（VStack 中不贪婪撑满），由 frame 钳制上下限。
+    private var inputField: some View {
+        TextField("输入问题…", text: $model.question, axis: .vertical)
+            .textFieldStyle(.plain)
+            .font(WorkbenchFont.font(16))
+            .foregroundStyle(WorkbenchPalette.textPrimary)
+            .lineLimit(1...6)
+            .frame(minHeight: 32, maxHeight: 128, alignment: .top)
+            .fixedSize(horizontal: false, vertical: true)
+            .focused($inputFocused)
+            .accessibilityIdentifier("workbench.question")
+    }
+
+    private var inputControlsRow: some View {
+        HStack(spacing: WorkbenchLayout.controlGap) {
+            Button(action: { showFilePicker = true }) {
+                HStack(spacing: 6) {
+                    Image(systemName: "paperclip")
+                        .font(.system(size: 16, weight: .regular))
+                    Text("附件")
+                        .font(WorkbenchFont.font(14))
+                }
+                .foregroundStyle(WorkbenchPalette.textPrimary)
+                .frame(width: 64, height: 32)
+                .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            }
+            .buttonStyle(WorkbenchFlatButtonStyle())
+            .accessibilityIdentifier("workbench.attachment")
+            .help("添加附件：点击选择文件，或直接拖入文件 / 图片，也可 ⌘V 粘贴图片")
+
+            Button(action: { voice.toggle() }) {
+                Image(systemName: voice.isRecording ? "stop.fill" : "mic.fill")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(voice.isRecording ? WorkbenchPalette.checkboxSelected : WorkbenchPalette.textPrimary)
+                    .frame(width: 32, height: 32)
+                    .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            }
+            .buttonStyle(WorkbenchFlatButtonStyle())
+            .accessibilityIdentifier("workbench.voice")
+            .help(voice.isRecording ? "停止录音" : "语音输入（点击开始，再次点击结束）")
+
+            if !model.attachments.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(model.attachments) { att in
+                            attachmentChip(att)
+                        }
+                    }
+                }
+                .frame(height: 32)
+            }
+
+            Spacer(minLength: 8)
+
+            HStack(spacing: 12) {
+                Text("Ctrl+Enter 发送")
+                    .font(WorkbenchFont.font(12))
+                    .foregroundStyle(WorkbenchPalette.textSecondary)
+                    .frame(width: 140, height: 24)
+                    .accessibilityIdentifier("workbench.send.hint")
+                sendButton
+            }
+        }
+    }
+
+    private func attachmentChip(_ att: WorkbenchModel.AttachmentItem) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: "doc.fill")
+                .font(.system(size: 12))
+                .foregroundStyle(WorkbenchPalette.textSecondary)
+            Text(att.name)
+                .font(WorkbenchFont.font(12))
+                .foregroundStyle(WorkbenchPalette.textPrimary)
+                .lineLimit(1)
+            Text(formatBytes(att.size))
+                .font(WorkbenchFont.font(11))
+                .foregroundStyle(WorkbenchPalette.textSecondary)
+            Button(action: { model.removeAttachment(id: att.id) }) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .semibold))
+                    .frame(width: 14, height: 14)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(WorkbenchPalette.textSecondary)
+            .help("移除 \(att.name)")
+        }
+        .padding(.leading, 8)
+        .padding(.trailing, 6)
+        .frame(height: 24)
+        .background(WorkbenchPalette.hoverFill, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+    }
+
+    /// 可发送条件沿用现有业务逻辑：非发送中，且（问题非空 或 有附件）。
+    private var canSend: Bool {
+        !model.sending &&
+        (!model.question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !model.attachments.isEmpty)
+    }
+
+    /// 文案按实际勾选数量动态变化；数量来自 enabledPanes（包含当前分页不可见的已选模型）。
+    private var sendTitle: String {
+        let n = model.enabledPanes.count
+        return n > 0 ? "发送给 \(n) 个模型" : "发送"
+    }
+
+    private var sendButton: some View {
+        Button(action: { model.send() }) {
+            Text(sendTitle)
+                .font(WorkbenchFont.font(14, weight: .semibold))
+                .foregroundStyle(canSend ? Color.white : WorkbenchPalette.textSecondary)
+                .frame(width: 144, height: 32)
+                .background(canSend ? WorkbenchPalette.sendEnabled : WorkbenchPalette.sendDisabled,
+                            in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+        .buttonStyle(WorkbenchSendButtonStyle())
+        .keyboardShortcut(.return, modifiers: [.command])
+        .keyboardShortcut(.return, modifiers: [.control])
+        .disabled(!canSend)
+        .accessibilityIdentifier("workbench.send")
+        .help("发送到所有勾选的模型（⌘↩ / Ctrl+Enter）")
+    }
+
+    private var dropOverlay: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(WorkbenchPalette.surface.opacity(0.94))
+            VStack(spacing: 6) {
+                Image(systemName: "paperclip")
+                    .font(.system(size: 18, weight: .medium))
+                Text("松开以添加附件")
+                    .font(WorkbenchFont.font(14))
+            }
+            .foregroundStyle(WorkbenchPalette.checkboxSelected)
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(WorkbenchPalette.checkboxSelected, style: StrokeStyle(lineWidth: 1.5, dash: [5, 4]))
+        }
+        .allowsHitTesting(false)
+    }
+
+    // MARK: - 模型勾选与窗口分页行（高 32）
+
+    private var modelRow: some View {
+        HStack(spacing: WorkbenchLayout.groupGap) {
+            ForEach(model.panes, id: \.adapter.id) { pane in
+                Toggle(pane.adapter.name, isOn: model.binding(for: pane.adapter.id))
+                    .toggleStyle(WorkbenchCheckToggleStyle())
+                    .frame(width: WorkbenchLayout.modelOptionWidth(for: pane.adapter.id), height: 32, alignment: .leading)
+                    .accessibilityIdentifier("workbench.model.\(pane.adapter.id)")
+            }
+
+            Spacer(minLength: 16)
+
+            statusTextGroup
+
+            if model.needsPaging {
+                pager
+            }
+        }
+        .frame(height: 32)
+    }
+
+    /// 瞬时状态文字（录音 / 就绪进度 / 发送结果），低强调纯文本。
+    @ViewBuilder
+    private var statusTextGroup: some View {
+        HStack(spacing: WorkbenchLayout.groupGap) {
+            if !voice.statusText.isEmpty {
+                statusText(voice.statusText)
+            }
+            if !model.loginProgress.isEmpty {
+                statusText(model.loginProgress)
+            }
+            if !model.statusText.isEmpty {
+                statusText(model.statusText)
+            }
+        }
+        .lineLimit(1)
+        .truncationMode(.tail)
+    }
+
+    private func statusText(_ text: String) -> some View {
+        Text(text)
+            .font(WorkbenchFont.font(12))
+            .foregroundStyle(WorkbenchPalette.textSecondary)
+            .monospacedDigit()
+            .accessibilityIdentifier("workbench.status")
+    }
+
+    /// 窗口分页：范围文字（112，右对齐）+ 两个 32×32 箭头按钮，无外框。
+    private var pager: some View {
+        HStack(spacing: WorkbenchLayout.controlGap) {
+            Text(model.pageIndicator)
+                .font(WorkbenchFont.font(12))
+                .foregroundStyle(WorkbenchPalette.textSecondary)
+                .monospacedDigit()
+                .frame(width: 112, alignment: .trailing)
+            pagerButton("chevron.left",
+                        disabled: model.windowStart == 0,
+                        help: "上一页窗口") { model.pageBackward() }
+            pagerButton("chevron.right",
+                        disabled: model.windowStart >= model.enabledPanes.count - WorkbenchModel.maxVisiblePanes,
+                        help: "下一页窗口") { model.pageForward() }
+        }
+        .frame(height: 32)
+    }
+
+    private func pagerButton(_ systemName: String, disabled: Bool, help: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(WorkbenchPalette.textPrimary)
+                .frame(width: 32, height: 32)
+                .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+        .buttonStyle(WorkbenchFlatButtonStyle())
+        .disabled(disabled)
+        .help(help)
+    }
+
+    // MARK: - 三列窗口（间距 16，等宽栅格）
 
     private var paneRow: some View {
         GeometryReader { geo in
             if model.visiblePanes.isEmpty {
-                VStack(spacing: 12) {
-                    Image(systemName: "square.stack.3d.up.slash")
-                        .font(.system(size: 30, weight: .light))
-                        .foregroundStyle(ContentPalette.sage.opacity(0.76))
-                    Text("尚未选择模型")
-                        .font(.title3.weight(.semibold))
-                    Text("在上方选择要参与显示和发送的平台")
-                        .font(.callout)
-                        .foregroundStyle(ContentPalette.graphite.opacity(0.58))
-                }
-                .padding(.horizontal, 34)
-                .padding(.vertical, 28)
-                .background(ContentPalette.warmWhite, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .stroke(ContentPalette.graphite.opacity(0.14))
-                        .allowsHitTesting(false)
-                )
-                .frame(width: geo.size.width, height: geo.size.height)
+                emptyState
+                    .frame(width: geo.size.width, height: geo.size.height)
             } else {
-                // 每 pane 最小 420px（更窄会触发平台响应式布局、输入框消失）
                 let count = CGFloat(model.visiblePanes.count)
-                let paneSpacing: CGFloat = 10
-                let paneInset: CGFloat = 12
-                let availableWidth = geo.size.width - paneInset * 2 - paneSpacing * max(count - 1, 0)
-                let paneWidth = max(availableWidth / count, 420)
-                ScrollView(.horizontal) {
-                    HStack(spacing: paneSpacing) {
+                let spacing = WorkbenchLayout.paneGap
+                let available = geo.size.width - spacing * (count - 1)
+                let width = max(available / count, 420)
+                if width * count + spacing * (count - 1) > geo.size.width {
+                    // 极窄窗口：保持每列最小 420 可读宽度，横向滚动
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: spacing) {
+                            ForEach(model.visiblePanes, id: \.adapter.id) { pane in
+                                paneView(pane).frame(width: width)
+                            }
+                        }
+                        .frame(minHeight: geo.size.height)
+                    }
+                } else {
+                    HStack(spacing: spacing) {
                         ForEach(model.visiblePanes, id: \.adapter.id) { pane in
-                            PaneView(
-                                controller: pane,
-                                focused: model.focusedID == pane.adapter.id,
-                                onToggleFocus: { model.toggleFocus(pane.adapter.id) }
-                            )
-                            .frame(width: paneWidth)
+                            paneView(pane).frame(maxWidth: .infinity)
                         }
                     }
-                    .padding(.horizontal, paneInset)
-                    .padding(.vertical, 12)
+                    .frame(height: geo.size.height)
                 }
             }
         }
     }
 
-    @ViewBuilder
-    private func statusPill(_ text: String, color: Color, systemImage: String) -> some View {
-        Label(text, systemImage: systemImage)
-            .font(.caption2.weight(.medium))
-            .foregroundStyle(color)
-            .fixedSize()
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(color.opacity(0.09), in: Capsule())
-            .overlay(
-                Capsule()
-                    .stroke(color.opacity(0.16))
-                    .allowsHitTesting(false)
-            )
+    private func paneView(_ pane: PaneController) -> some View {
+        PaneView(
+            controller: pane,
+            focused: model.focusedID == pane.adapter.id,
+            onToggleFocus: { model.toggleFocus(pane.adapter.id) }
+        )
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "square.stack.3d.up.slash")
+                .font(.system(size: 30, weight: .light))
+                .foregroundStyle(WorkbenchPalette.textSecondary.opacity(0.7))
+            Text("尚未选择模型")
+                .font(WorkbenchFont.font(16, weight: .semibold))
+                .foregroundStyle(WorkbenchPalette.textPrimary)
+            Text("在上方勾选要参与显示和发送的平台")
+                .font(WorkbenchFont.font(13))
+                .foregroundStyle(WorkbenchPalette.textSecondary)
+        }
     }
 
     private func formatBytes(_ n: Int) -> String {
@@ -384,177 +512,140 @@ struct ContentView: View {
         if n < 1024 * 1024 { return String(format: "%.1fKB", Double(n) / 1024) }
         return String(format: "%.1fMB", Double(n) / 1024 / 1024)
     }
-}
 
-private struct WorkbenchPrimaryButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        WorkbenchPrimaryButtonBody(configuration: configuration)
+    /// 抓取本应用窗口（含标题栏）的 PNG。仅用于验收取证（WB_SHOT 钩子）。
+    static func captureWindowShot(to path: String) {
+        let pid = ProcessInfo.processInfo.processIdentifier
+        let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]]
+        let mine = (list ?? []).filter { (($0[kCGWindowOwnerPID as String] as? NSNumber)?.intValue ?? -1) == pid
+                                            && ($0[kCGWindowLayer as String] as? Int ?? 99) == 0 }
+        // 取面积最大的主窗口（避免抓到菜单/辅助窗口）
+        guard let info = mine.max(by: { area($0) < area($1) }),
+              let wid = info[kCGWindowNumber as String] as? CGWindowID,
+              let b = info[kCGWindowBounds as String] as? [String: CGFloat],
+              let w = b["Width"], let h = b["Height"],
+              let img = CGWindowListCreateImage(CGRect(x: 0, y: 0, width: w, height: h),
+                                                .optionIncludingWindow, wid,
+                                                [.boundsIgnoreFraming, .bestResolution]) else {
+            let owners = (list ?? []).compactMap { ($0[kCGWindowOwnerPID as String] as? NSNumber)?.intValue }
+            print("[WB_SHOT] ❌ 窗口截图失败 (pid=\(pid), 屏上窗口 owner=\(owners))")
+            return
+        }
+        let rep = NSBitmapImageRep(cgImage: img)
+        guard let png = rep.representation(using: .png, properties: [:]) else {
+            print("[WB_SHOT] ❌ PNG 编码失败")
+            return
+        }
+        do {
+            try png.write(to: URL(fileURLWithPath: path))
+            print("[WB_SHOT] ✅ 已保存 \(path) \(Int(w))×\(Int(h))px")
+        } catch {
+            print("[WB_SHOT] ❌ 写入失败: \(error)")
+        }
+    }
+
+    private static func area(_ info: [String: Any]) -> CGFloat {
+        guard let b = info[kCGWindowBounds as String] as? [String: CGFloat] else { return 0 }
+        return (b["Width"] ?? 0) * (b["Height"] ?? 0)
     }
 }
 
-private struct WorkbenchPrimaryButtonBody: View {
+// MARK: - 按钮样式
+
+/// 普通扁平按钮：默认无边框无底色，悬停 #EBEDF0，圆角 8。
+private struct WorkbenchFlatButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        WorkbenchFlatButtonBody(configuration: configuration)
+    }
+}
+
+private struct WorkbenchFlatButtonBody: View {
     let configuration: ButtonStyle.Configuration
     @Environment(\.isEnabled) private var isEnabled
-    @State private var isHovered = false
+    @State private var hovered = false
 
     var body: some View {
         configuration.label
-            .foregroundStyle(ContentPalette.warmWhite)
-            .padding(.horizontal, 23)
-            .frame(height: 46)
             .background(
-                ContentPalette.sage.opacity(isHovered ? 1 : 0.92),
-                in: RoundedRectangle(cornerRadius: 13, style: .continuous)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 13, style: .continuous)
-                    .stroke(ContentPalette.graphite.opacity(isHovered ? 0.18 : 0.1))
-                    .allowsHitTesting(false)
-            )
-            .scaleEffect(configuration.isPressed ? 0.975 : (isHovered ? 1.01 : 1))
-            .opacity(isEnabled ? 1 : 0.48)
-            .animation(.easeOut(duration: 0.14), value: configuration.isPressed)
-            .animation(.easeOut(duration: 0.16), value: isHovered)
-            .onHover { isHovered = $0 }
-    }
-}
-
-private struct WorkbenchIconButtonStyle: ButtonStyle {
-    let tint: Color
-    var selected = false
-
-    func makeBody(configuration: Configuration) -> some View {
-        WorkbenchIconButtonBody(configuration: configuration, tint: tint, selected: selected)
-    }
-}
-
-private struct WorkbenchIconButtonBody: View {
-    let configuration: ButtonStyle.Configuration
-    let tint: Color
-    let selected: Bool
-    @Environment(\.isEnabled) private var isEnabled
-    @State private var isHovered = false
-
-    var body: some View {
-        configuration.label
-            .foregroundStyle(tint)
-            .frame(width: 46, height: 46)
-            .background(
-                (selected ? tint.opacity(0.16) : ContentPalette.graphite.opacity(isHovered ? 0.07 : 0.035)),
-                in: RoundedRectangle(cornerRadius: 13, style: .continuous)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 13, style: .continuous)
-                    .stroke((selected || isHovered) ? tint.opacity(0.34) : ContentPalette.graphite.opacity(0.14))
-                    .allowsHitTesting(false)
-            )
-            .scaleEffect(configuration.isPressed ? 0.95 : (isHovered ? 1.015 : 1))
-            .opacity(isEnabled ? 1 : 0.45)
-            .animation(.easeOut(duration: 0.14), value: configuration.isPressed)
-            .animation(.easeOut(duration: 0.16), value: isHovered)
-            .onHover { isHovered = $0 }
-    }
-}
-
-private struct WorkbenchSoftButtonStyle: ButtonStyle {
-    let tint: Color
-    var emphasized = false
-
-    func makeBody(configuration: Configuration) -> some View {
-        WorkbenchSoftButtonBody(configuration: configuration, tint: tint, emphasized: emphasized)
-    }
-}
-
-private struct WorkbenchSoftButtonBody: View {
-    let configuration: ButtonStyle.Configuration
-    let tint: Color
-    let emphasized: Bool
-    @Environment(\.isEnabled) private var isEnabled
-    @State private var isHovered = false
-
-    var body: some View {
-        configuration.label
-            .font(.caption.weight(.medium))
-            .foregroundStyle(emphasized ? ContentPalette.warmWhite : tint)
-            .padding(.horizontal, 10)
-            .frame(height: 28)
-            .background(
-                emphasized ? tint : tint.opacity(isHovered ? 0.13 : 0.075),
+                WorkbenchPalette.hoverFill.opacity(hovered ? 1 : 0),
                 in: RoundedRectangle(cornerRadius: 8, style: .continuous)
             )
+            .opacity(isEnabled ? 1 : 0.4)
+            .scaleEffect(configuration.isPressed ? 0.96 : 1)
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+            .animation(.easeOut(duration: 0.12), value: hovered)
+            .onHover { hovered = $0 }
+    }
+}
+
+/// 发送按钮：深色底白字为页面唯一高强调；悬停略加深。
+private struct WorkbenchSendButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        WorkbenchSendButtonBody(configuration: configuration)
+    }
+}
+
+private struct WorkbenchSendButtonBody: View {
+    let configuration: ButtonStyle.Configuration
+    @Environment(\.isEnabled) private var isEnabled
+    @State private var hovered = false
+
+    var body: some View {
+        configuration.label
             .overlay(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .stroke(emphasized ? ContentPalette.graphite.opacity(0.12) : tint.opacity(isHovered ? 0.3 : 0.18))
+                    .fill(WorkbenchPalette.sendHover.opacity(isEnabled && hovered ? 0.3 : 0))
                     .allowsHitTesting(false)
             )
-            .scaleEffect(configuration.isPressed ? 0.96 : 1)
-            .opacity(isEnabled ? 1 : 0.45)
-            .animation(.easeOut(duration: 0.13), value: configuration.isPressed)
-            .animation(.easeOut(duration: 0.15), value: isHovered)
-            .onHover { isHovered = $0 }
-    }
-}
-
-private struct WorkbenchTextButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.caption.weight(.medium))
-            .foregroundStyle(ContentPalette.graphite.opacity(0.62))
-            .padding(.horizontal, 7)
-            .padding(.vertical, 5)
-            .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
-            .background(ContentPalette.graphite.opacity(configuration.isPressed ? 0.1 : 0), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+            .animation(.easeOut(duration: 0.12), value: hovered)
+            .onHover { hovered = $0 }
     }
 }
 
-private struct WorkbenchMiniIconButtonStyle: ButtonStyle {
+// MARK: - 模型复选样式（16×16 复选框 + 14px 文字，无胶囊边框）
+
+private struct WorkbenchCheckToggleStyle: ToggleStyle {
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(ContentPalette.graphite.opacity(0.62))
-            .frame(width: 24, height: 24)
-            .background(ContentPalette.graphite.opacity(configuration.isPressed ? 0.09 : 0), in: Circle())
-            .scaleEffect(configuration.isPressed ? 0.9 : 1)
-            .opacity(configuration.isPressed ? 0.75 : 1)
+        WorkbenchCheckToggleBody(configuration: configuration)
     }
 }
 
-private struct WorkbenchPlatformToggleStyle: ToggleStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        WorkbenchPlatformToggleBody(configuration: configuration)
-    }
-}
-
-private struct WorkbenchPlatformToggleBody: View {
+private struct WorkbenchCheckToggleBody: View {
     let configuration: ToggleStyle.Configuration
-    @State private var isHovered = false
+    @State private var hovered = false
+    @FocusState private var focused: Bool
 
     var body: some View {
         Button(action: { configuration.isOn.toggle() }) {
-            HStack(spacing: 5) {
-                Image(systemName: configuration.isOn ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 11, weight: .semibold))
+            HStack(spacing: 8) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 3, style: .continuous)
+                        .fill(configuration.isOn ? WorkbenchPalette.checkboxSelected : Color.clear)
+                    RoundedRectangle(cornerRadius: 3, style: .continuous)
+                        .stroke(
+                            focused ? WorkbenchPalette.checkboxSelected :
+                            (configuration.isOn ? WorkbenchPalette.checkboxSelected :
+                             (hovered ? WorkbenchPalette.textPrimary.opacity(0.55) : WorkbenchPalette.inputBorder)),
+                            lineWidth: focused ? 2 : 1
+                        )
+                    if configuration.isOn {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(Color.white)
+                    }
+                }
+                .frame(width: 16, height: 16)
                 configuration.label
-                    .font(.caption.weight(.medium))
+                    .font(WorkbenchFont.font(14))
+                    .foregroundStyle(WorkbenchPalette.textPrimary)
             }
-            .foregroundStyle(configuration.isOn ? ContentPalette.sage : ContentPalette.graphite.opacity(0.62))
-            .padding(.horizontal, 9)
-            .frame(height: 27)
-            .background(
-                configuration.isOn ? ContentPalette.sage.opacity(isHovered ? 0.16 : 0.11) : ContentPalette.graphite.opacity(isHovered ? 0.07 : 0.035),
-                in: Capsule()
-            )
-            .overlay(
-                Capsule().stroke(
-                    configuration.isOn ? ContentPalette.sage.opacity(isHovered ? 0.38 : 0.25) : ContentPalette.graphite.opacity(0.14)
-                )
-                .allowsHitTesting(false)
-            )
-            .animation(.easeOut(duration: 0.15), value: configuration.isOn)
-            .animation(.easeOut(duration: 0.15), value: isHovered)
+            .frame(height: 32)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .onHover { isHovered = $0 }
+        .focused($focused)
+        .onHover { hovered = $0 }
     }
 }

@@ -1,0 +1,15 @@
+{
+  "version": "0.6.0",
+  "publishedAt": "2026-10-25T00:00:00Z",
+  "notes": "智囊本地服务工作台 v0.6.0",
+  "artifacts": {
+    "darwin-universal": {
+      "url": "https://github.com/porcelaintech/parallel-workshop/releases/download/v0.6.0/Braintrust-local-service-macos-0.6.0.zip",
+      "sha256": "REPLACE_WITH_MACOS_SHA256"
+    },
+    "win32-x64": {
+      "url": "https://github.com/porcelaintech/parallel-workshop/releases/download/v0.6.0/Braintrust-local-service-windows-0.6.0.zip",
+      "sha256": "REPLACE_WITH_WINDOWS_SHA256"
+    }
+  }
+}

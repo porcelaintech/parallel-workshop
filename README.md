@@ -2,6 +2,8 @@
 
 一次提问，多位 AI 并排回答。智囊（原「平行工作台」）把 ChatGPT、DeepSeek、豆包、Kimi、通义千问和文心一言放进同一个工作区。
 
+> **2026-10-26 本地服务分支进度**：官网下载形态已是 Windows EXE / macOS DMG，当前修复候选为 `0.6.0-rc.2.C`。Windows 直接分发，不以商店上架或开发者注册为前提；候选的受控安装与本地功能已在 Windows 虚拟机验证，下载后的系统确认和真实 AI 问答仍未验收。详见[当前分发说明](distribution/README.md)和[本轮验证记录](docs/windows-validation-2026-10-26.md)。以下 v0.4.1 原生/扩展稳定通道说明继续保留，不代表本地服务候选已经正式发布。
+
 - [Windows 安装与打开](Windows/README.md)：一条 PowerShell 命令，之后从桌面「智囊」启动。
 - [macOS 安装与打开](macOS/README.md)：一条终端命令安装原生应用。
 - [复制给 Agent 的极简安装 Prompt](AGENT_INSTALL_PROMPT.md)：按平台直接执行官方命令。
@@ -59,7 +61,7 @@ swift build && open -n .build/arm64-apple-macosx/debug/ParallelWorkbench
 # 或 swift run ParallelWorkbench
 ```
 
-每个 pane 有独立标题栏：平台名、文字状态角标、放大/缩小按钮、刷新按钮和发送结果反馈；工作台外壳只使用暖白、石墨、鼠尾草三色，通过明度、描边和文案区分状态。
+每个 pane 有独立标题栏（40px）：平台名、纯文字状态（就绪/未登录/需人工验证等）与「…」菜单（独立缩放、恢复 100%、放大窗口、重新加载、回到对话）；工作台外壳使用浅灰底 + 白卡的低强调色板，深色仅用于可发送状态下的发送按钮。中文按宋体（SimSun，缺失时回退 Songti SC）、英文与数字按 Helvetica 渲染。
 
 ## 无人值守验收测试
 
@@ -141,6 +143,17 @@ bash scripts/package-app.sh   # 生成 build/ParallelWorkbench.app（未签名�
   - 通道机制：有文件输入框的平台走 `input.files` 原生上传管线；其余走 CDP 拖放（尽力而为——扩展无文件系统权限，CDP 只能投递 MIME 数据，无法构造真实 File）
 - **语音输入**：macOS 使用系统 `SFSpeechRecognizer`，Edge 使用 Web Speech API；是否完全在设备端处理取决于系统、语言与浏览器能力。点击 🎤 开始，实时转写进输入框，再点一次结束
 - 首次使用语音：macOS 需授权麦克风与语音识别（系统设置 → 隐私与安全性）
+
+## 本地工作台分发（Phase 0）
+
+`distribution/` 是本地工作台的独立分发外壳：macOS 和 Windows **两个独立安装包/下载入口**，不需要 Apple 公证或 Windows 代码签名，也不需要浏览器扩展。安装器在本机生成「智囊.app」或带图标的快捷方式；Node 22 运行时随包分发，浏览器使用系统 Edge/Chrome/Chromium。
+
+- 构建：`VERSION=0.6.0 bash distribution/scripts/build-release.sh`
+- 官网：`website/`（Cloudflare Pages / 自定义域名 `braintrust.chat`）
+- 更新索引：`https://braintrust.chat/updates/local-service-update.json`
+- 说明：`distribution/README.md`、`website/README.md`
+
+Phase 0 只交付分发外壳和安装器；设计版工作台的 iframe/CDP 移植与完整 UI 是 Phase 1，当前 `local-service/public` 仍是极简控制页，不能当正式产品发布。
 
 ## 版本更新
 

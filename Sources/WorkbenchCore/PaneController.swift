@@ -36,6 +36,14 @@ public enum PaneStatus: Equatable {
                 forMainFrameOnly: true
             ))
         }
+        // 页面适配（字体统一 + 推广精简）：全部平台的主框架注入
+        if !InjectionScripts.pageThemeJS.isEmpty {
+            config.userContentController.addUserScript(WKUserScript(
+                source: InjectionScripts.pageThemeJS,
+                injectionTime: .atDocumentStart,
+                forMainFrameOnly: true
+            ))
+        }
         self.webView = WKWebView(frame: .zero, configuration: config)
         super.init()
         webView.navigationDelegate = self
@@ -425,6 +433,104 @@ public enum PaneStatus: Equatable {
             } catch {}
           }
           return { tag: 'NONE' };
+        })()
+        """
+        guard let result = try? await eval(js), let dict = result as? [String: Any] else { return [:] }
+        return dict
+    }
+
+    /// 调试用：对已加载页面执行任意 JS 并取回结果（--eval 选项）。
+    public func debugEval(_ js: String) async -> Any? {
+        try? await eval(js)
+    }
+
+    /// 页面适配审计（--ui-audit）：主题注入状态、字体实际命中、推广候选元素、关键功能可见性。
+    public func uiAudit() async -> [String: Any] {
+        let js = """
+        (function(){
+          const out = {};
+          out.host = location.hostname;
+          out.url = location.href;
+          out.themeInjected = !!document.getElementById('__wb_theme_style__');
+          const fam = (el) => el ? getComputedStyle(el).fontFamily : null;
+          out.bodyFont = fam(document.body);
+          const inp = document.querySelector('textarea, [contenteditable="true"], input[type="text"]');
+          out.inputFont = fam(inp);
+          out.placeholderFont = inp ? getComputedStyle(inp, '::placeholder').fontFamily : null;
+          let btn = null;
+          document.querySelectorAll('button').forEach((b) => { if (!btn && (b.textContent || '').trim()) btn = b; });
+          out.buttonFont = fam(btn);
+          try {
+            out.fontChecks = {
+              helveticaLatin: document.fonts.check('14px Helvetica', 'ChatGPT'),
+              helveticaDigit: document.fonts.check('14px Helvetica', '100%'),
+              simsunCJK: document.fonts.check('14px SimSun', '智囊'),
+              songtiCJK: document.fonts.check('14px "Songti SC"', '智囊')
+            };
+          } catch (e) { out.fontChecks = { error: String(e) }; }
+          // 推广候选取证：短文本且命中关键词的元素 + 4 层祖先链
+          const pats = ['下载电脑版','Download for Desktop','下载App','下载 App','App 下载','推荐问题','为你推荐','新任务','新工作','电脑版','安装桌面版','desktop app','Desktop App','下载客户端'];
+          out.promo = [];
+          document.querySelectorAll('a, button, div, span, section, aside, li').forEach((e) => {
+            const t = (e.textContent || '').trim();
+            if (t.length > 0 && t.length <= 40) {
+              for (const p of pats) {
+                if (t.includes(p)) {
+                  let chain = ''; let n = e;
+                  for (let i = 0; i < 4 && n; i++) {
+                    chain = n.tagName.toLowerCase() + (typeof n.className === 'string' && n.className ? '.' + n.className.trim().split(/\\s+/).join('.') : '') + (n.id ? '#' + n.id : '') + ' > ' + chain;
+                    n = n.parentElement;
+                  }
+                  const r = e.getBoundingClientRect();
+                  out.promo.push({
+                    text: t.slice(0, 30), tag: e.tagName,
+                    cls: (typeof e.className === 'string' ? e.className : '').slice(0, 100),
+                    id: (e.id || '').slice(0, 60),
+                    visible: !!(r && r.width > 0 && r.height > 0),
+                    chain: chain.slice(0, 320)
+                  });
+                  break;
+                }
+              }
+            }
+            if (out.promo.length >= 20) return;
+          });
+          // 关键功能可见性（登录入口、对话输入、发送按钮）
+          const vis = (el) => { if (!el) return false; const r = el.getBoundingClientRect ? el.getBoundingClientRect() : null; return !!(r && r.width > 0 && r.height > 0); };
+          out.critical = {
+            input: vis(document.querySelector('textarea, [contenteditable="true"]')),
+            login: (() => {
+              let hit = false;
+              document.querySelectorAll('a, button, [role="button"]').forEach((e) => {
+                if (hit) return;
+                const t = (e.textContent || '').trim();
+                if (t && t.length < 24 && /登录|Log in|Sign in/.test(t) && vis(e)) hit = true;
+              });
+              return hit;
+            })()
+          };
+          // 下载/推广相关链接
+          out.downloadLinks = [];
+          document.querySelectorAll('a[href]').forEach((a) => {
+            const h = a.getAttribute('href') || '';
+            const t = (a.textContent || '').trim();
+            if ((/download|app|desktop|client/i.test(h) || /下载|电脑版|桌面版/i.test(t)) && t.length <= 30) {
+              if (out.downloadLinks.length < 10) {
+                out.downloadLinks.push({ text: t.slice(0, 24), href: h.slice(0, 120),
+                  cls: (typeof a.className === 'string' ? a.className : '').slice(0, 80), visible: vis(a) });
+              }
+            }
+          });
+          // 页面文本片段（辅助识别推荐区）
+          const bodyText = (document.body ? document.body.innerText : '');
+          out.textHits = {
+            hasNewWork: bodyText.includes('新工作'),
+            hasRecommend: bodyText.includes('推荐'),
+            hasDownload: bodyText.includes('下载电脑版') || bodyText.includes('Download for Desktop'),
+            length: bodyText.length
+          };
+          out.pageText = bodyText.slice(0, 800);
+          return out;
         })()
         """
         guard let result = try? await eval(js), let dict = result as? [String: Any] else { return [:] }

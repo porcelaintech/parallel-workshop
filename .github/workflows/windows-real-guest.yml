@@ -1,0 +1,76 @@
+name: Windows real guest query
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [release/local-service]
+    paths:
+      - '.github/workflows/windows-real-guest.yml'
+      - 'scripts/windows-guest-send-test.mjs'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  guest:
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [api, trusted-control]
+    runs-on: windows-2025
+    timeout-minutes: 10
+    env:
+      CI: 'true'
+      BRAINTRUST_NO_DIALOG: '1'
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: 40284433327
+          name: windows-candidate
+          path: candidate/
+      - name: Install verified unchanged candidate and launch desktop shortcut
+        shell: powershell
+        run: |
+          $proof=Get-Content candidate\build-proof.json -Raw | ConvertFrom-Json
+          if ($proof.sourceCommit -ne '643ecc0bf748df5ad4c157484567a8a052e5f3d3') { throw 'Wrong guest-test source' }
+          $setup=Join-Path (Resolve-Path candidate) $proof.installer.name
+          if ((Get-FileHash $setup -Algorithm SHA256).Hash.ToLower() -ne $proof.installer.sha256) { throw 'Wrong guest-test installer bytes' }
+          $process=Start-Process $setup -ArgumentList '/S' -PassThru
+          if (-not $process.WaitForExit(90000) -or $process.ExitCode -ne 0) { throw 'Guest-test install failed' }
+          Start-Process (Join-Path ([Environment]::GetFolderPath('Desktop')) 'Braintrust.lnk')
+          $info=Join-Path $env:LOCALAPPDATA 'Braintrust\data\service.json'
+          $ready=$false
+          for ($i=0;$i -lt 120;$i++) {
+            try {
+              $state=Get-Content $info -Raw | ConvertFrom-Json
+              $health=Invoke-RestMethod "http://127.0.0.1:$($state.port)/api/health" -Headers @{Authorization="Bearer $($state.token)"} -TimeoutSec 2
+              if ($health.browser.version.Browser) {$ready=$true;break}
+            } catch {}
+            Start-Sleep -Milliseconds 500
+          }
+          if (-not $ready) {throw 'Guest-test browser did not start'}
+      - name: One real guest ChatGPT question through installed product API
+        shell: powershell
+        run: |
+          $root=Join-Path $env:LOCALAPPDATA 'Braintrust\service'
+          $args=@('scripts\windows-guest-send-test.mjs','--service-info',(Join-Path $env:LOCALAPPDATA 'Braintrust\data\service.json'),'--evidence','evidence')
+          if('${{ matrix.mode }}' -eq 'trusted-control'){$args+='--trusted-control'}
+          & (Join-Path $root 'runtime\node-win-x64\node.exe') @args
+          if ($LASTEXITCODE -ne 0) {throw 'Guest query is blocked or unverified; inspect evidence'}
+      - name: Clean up exact VM installation
+        if: always()
+        shell: powershell
+        run: |
+          $root=Join-Path $env:LOCALAPPDATA 'Braintrust'
+          $stop=Join-Path $root 'service\stop.ps1'
+          if(Test-Path $stop){& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $stop -ServiceRoot (Join-Path $root 'service')}
+          $un=Join-Path $root 'Uninstall.exe'
+          if(Test-Path $un){$copy=Join-Path $env:RUNNER_TEMP 'guest-uninstall.exe';Copy-Item $un $copy;$p=Start-Process $copy -ArgumentList ('/S _?='+$root) -PassThru;if(-not $p.WaitForExit(30000)){throw 'Guest cleanup timeout'}}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: real-guest-evidence-${{ matrix.mode }}
+          path: evidence/

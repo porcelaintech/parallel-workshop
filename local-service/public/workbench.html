@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>智囊 · Braintrust</title>
+<link rel="stylesheet" href="workbench.css">
+</head>
+<body>
+<div id="startup-overlay" role="status" aria-live="polite">
+  <div class="startup-card">
+    <div class="startup-copy">
+      <strong>智囊</strong>
+      <span id="startup-text">正在启动工作台…</span>
+    </div>
+    <div class="startup-track"><div class="startup-bar"></div></div>
+  </div>
+</div>
+
+<div id="brandbar">
+  <h1 id="title">智囊</h1>
+  <div id="global-menu">
+    <button id="menu-btn" class="icon-btn" type="button" aria-haspopup="menu" aria-expanded="false" title="版本、检查更新与关于">
+      <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="2.6" cy="8" r="1.4"/><circle cx="8" cy="8" r="1.4"/><circle cx="13.4" cy="8" r="1.4"/></svg>
+    </button>
+    <div id="menu-pop" class="menu-pop" role="menu" hidden>
+      <div id="update-status" class="menu-note" role="status" aria-live="polite"></div>
+      <div id="update-version" class="menu-note muted"></div>
+      <div class="menu-sep"></div>
+      <button id="update-btn" class="menu-item" type="button">检查更新</button>
+      <div class="menu-sep"></div>
+      <a class="menu-item" href="https://github.com/porcelaintech/parallel-workshop" target="_blank" rel="noreferrer">关于智囊</a>
+    </div>
+  </div>
+</div>
+
+<section id="composer" aria-label="统一输入区">
+  <textarea id="question" placeholder="输入问题…" aria-label="输入问题"></textarea>
+  <div id="composer-row">
+    <button id="attach-btn" title="添加附件：点击选择文件，或直接拖入文件 / 图片，也可 Ctrl+V 粘贴图片">
+      <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M5.2 3.4a2.6 2.6 0 0 1 4.4 1.9v6.9a1.9 1.9 0 0 1-3.8 0V5.4a1.2 1.2 0 0 1 2.4 0v6.2" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+      <span>附件</span>
+    </button>
+    <button id="mic" class="icon-btn" title="语音输入（再次点击结束）" aria-label="语音输入">
+      <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="6" y="2.5" width="4" height="8" rx="2" fill="currentColor"/><path d="M3.5 7.5v.5a4.5 4.5 0 0 0 9 0v-.5M8 12.5V14" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" fill="none"/></svg>
+    </button>
+    <div id="attach-chips"></div>
+    <span class="spacer"></span>
+    <span id="send-hint">Ctrl+Enter 发送</span>
+    <button id="send" disabled>发送</button>
+  </div>
+  <input type="file" id="file-input" multiple style="display:none">
+  <div id="drop-overlay" hidden><span>松开以添加附件</span></div>
+</section>
+
+<section id="modelrow" aria-label="模型选择与窗口分页">
+  <div id="checks"></div>
+  <span id="progress"></span>
+  <div id="paging" style="display:none">
+    <span id="page-ind"></span>
+    <button id="page-left" class="icon-btn" title="上一页窗口" aria-label="上一页窗口">
+      <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3 5.5 8 10 13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <button id="page-right" class="icon-btn" title="下一页窗口" aria-label="下一页窗口">
+      <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3l4.5 5L6 13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+  </div>
+</section>
+
+<main id="panes"></main>
+<script src="/config.js"></script>
+<script src="workbench-local.js"></script>
+</body>
+</html>

@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+Disallow: /updates/
+
+Sitemap: https://braintrust.chat/sitemap.xml

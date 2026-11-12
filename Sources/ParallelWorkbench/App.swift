@@ -17,13 +17,14 @@ struct ParallelWorkbenchApp: App {
     }
 
     var body: some Scene {
-        WindowGroup("智囊 · Braintrust") {
+        WindowGroup("智囊") {
             ContentView()
                 .environmentObject(updates)
-                .frame(minWidth: 1280, minHeight: 780)
+                .frame(minWidth: 1280, minHeight: 760)
         }
         .windowResizability(.contentMinSize)
-        .defaultSize(width: 1520, height: 900)
+        // 参考画布 2048×1325（含标题栏）；屏幕放不下时 macOS 自动收敛到可见区域
+        .defaultSize(width: 2048, height: 1325)
         .commands {
             CommandGroup(after: .appInfo) {
                 Button("检查更新…") { updates.manualCheck() }

@@ -1,0 +1,44 @@
+name: Windows downloaded installer observation
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [release/local-service]
+    paths:
+      - '.github/workflows/windows-downloaded-installer-observe.yml'
+      - 'scripts/windows-downloaded-installer-observe.ps1'
+
+permissions:
+  contents: read
+
+jobs:
+  observe:
+    runs-on: windows-2025
+    timeout-minutes: 8
+    env:
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+      - name: Download real installer through official browser button
+        shell: powershell
+        run: |
+          $edge=Join-Path ${env:ProgramFiles(x86)} 'Microsoft\Edge\Application\msedge.exe'
+          node scripts/windows-installed-ui-test.mjs --download --browser $edge --output "$env:RUNNER_TEMP\public-setup.exe" --evidence evidence\download
+          if($LASTEXITCODE -ne 0){throw 'Official browser download failed'}
+          $hash=(Get-FileHash "$env:RUNNER_TEMP\public-setup.exe" -Algorithm SHA256).Hash.ToLower()
+          if($hash -ne '5b25f75d70ce9c20c5aa11513048e47af475258b488f8cab5be6463229a5ac65'){throw 'Official historical bytes changed'}
+      - name: Observe downloaded file launch and Windows prompts without clicking
+        shell: powershell
+        run: |
+          $tokens=$null;$errors=$null
+          [Management.Automation.Language.Parser]::ParseFile((Resolve-Path scripts\windows-downloaded-installer-observe.ps1),[ref]$tokens,[ref]$errors)|Out-Null
+          if($errors.Count){throw ($errors|Out-String)}
+          & scripts\windows-downloaded-installer-observe.ps1 -Installer "$env:RUNNER_TEMP\public-setup.exe" -Evidence evidence\launch
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: downloaded-installer-observation
+          path: evidence/

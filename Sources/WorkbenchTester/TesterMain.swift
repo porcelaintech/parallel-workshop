@@ -52,9 +52,14 @@ struct WorkbenchTester {
         }
         var probeOnly = false
         var force = false
+        var uiAudit = false
         var only: Set<String>? = nil
         if let i = args.firstIndex(of: "--probe-only") {
             probeOnly = true
+            args.remove(at: i)
+        }
+        if let i = args.firstIndex(of: "--ui-audit") {
+            uiAudit = true
             args.remove(at: i)
         }
         if let i = args.firstIndex(of: "--force") {
@@ -84,6 +89,10 @@ struct WorkbenchTester {
         var clickSelector: String? = nil
         if let i = args.firstIndex(where: { $0.hasPrefix("--click=") }) {
             clickSelector = String(args.remove(at: i).dropFirst("--click=".count))
+        }
+        var evalJS: String? = nil
+        if let i = args.firstIndex(where: { $0.hasPrefix("--eval=") }) {
+            evalJS = String(args.remove(at: i).dropFirst("--eval=".count))
         }
         var attachOnly = false
         if let i = args.firstIndex(of: "--attach-only") {
@@ -145,11 +154,47 @@ struct WorkbenchTester {
             let logins = await pane.loginElements()
             print("状态: \(pane.statusLabel)，输入框可用: \(hasInput)")
             print("输入框详情: \(detail)")
+            if let evalJS {
+                await pane.idle(8)
+                if let r = await pane.debugEval(evalJS) {
+                    print("eval 结果: \(r)")
+                } else {
+                    print("eval 结果: nil")
+                }
+                continue
+            }
             if !buttons.isEmpty {
                 print("候选发送按钮: \(buttons)")
             }
             if !logins.isEmpty {
                 print("登录入口元素: \(logins)")
+            }
+            // 页面适配审计：主题注入/字体命中/推广候选/关键功能可见性
+            if uiAudit {
+                await pane.idle(8)
+                let audit = await pane.uiAudit()
+                print("【UI 审计】\(adapter.name):")
+                print("  host=\(audit["host"] ?? "?") url=\(audit["url"] ?? "?") themeInjected=\(audit["themeInjected"] ?? "?")")
+                print("  bodyFont=\(audit["bodyFont"] ?? "?")")
+                print("  inputFont=\(audit["inputFont"] ?? "?")")
+                print("  placeholderFont=\(audit["placeholderFont"] ?? "?")")
+                print("  buttonFont=\(audit["buttonFont"] ?? "?")")
+                print("  fontChecks=\(audit["fontChecks"] ?? "?")")
+                print("  critical=\(audit["critical"] ?? "?")")
+                print("  downloadLinks=\(audit["downloadLinks"] ?? "?")")
+                print("  textHits=\(audit["textHits"] ?? "?")")
+                print("  pageText=\(audit["pageText"] ?? "?")")
+                if let promo = audit["promo"] as? [[String: Any]] {
+                    print("  推广候选(\(promo.count)):")
+                    for p in promo {
+                        print("    [\(p["visible"] as? Bool == true ? "可见" : "隐藏")] \(p["text"] ?? "?") <\(p["tag"] ?? "?") class=\(p["cls"] ?? "-") id=\(p["id"] ?? "-")>")
+                        print("      \(p["chain"] ?? "-")")
+                    }
+                }
+                let shotPath = outDir.appendingPathComponent("\(adapter.id)-ui.png").path
+                let shot = await pane.screenshot(to: shotPath)
+                print("  截图: \(shot ? "OK \(shotPath)" : "失败")")
+                continue
             }
             // 探测模式打印全部输入框候选（识别哪个才是主聊天输入框）
             if probeOnly {
