@@ -32,3 +32,5 @@ distribution/spike/*.json
 distribution/spike/*.out
 distribution/spike/*.err
 website/.wrangler/
+.swiftpm-cache/
+ui-evidence/

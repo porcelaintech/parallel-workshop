@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { platform } from 'node:os';
 import { join } from 'node:path';
@@ -6,6 +6,24 @@ import { SERVICE_ROOT } from './paths.mjs';
 import { FrameBridge } from './frame-bridge.mjs';
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+// 内嵌网页适配（字体统一 + 推广精简）：随包 data/theme.js，开发模式回退源码树
+let themeJSCache = null;
+export function loadPageThemeJS() {
+  if (themeJSCache !== null) return themeJSCache;
+  const candidates = [
+    join(SERVICE_ROOT, 'data', 'theme.js'),
+    join(SERVICE_ROOT, '..', 'Sources', 'WorkbenchCore', 'Resources', 'injection', 'theme.js')
+  ];
+  themeJSCache = '';
+  for (const path of candidates) {
+    if (existsSync(path)) {
+      try { themeJSCache = readFileSync(path, 'utf8'); } catch {}
+      if (themeJSCache) break;
+    }
+  }
+  return themeJSCache;
+}
 
 export class BrowserManager {
   constructor({ dataDir, browser = 'auto', serviceURL, log = () => {} }) {
@@ -170,6 +188,11 @@ export class BrowserManager {
     const matches = targets.filter(item => (item.type === 'page' || item.type === 'iframe') && hostMatches(item.url, adapter));
     const target = matches.find(item => item.type === 'iframe') || matches[0];
     if (!target?.webSocketDebuggerUrl) return { ok: false, state: 'not-open', url: null };
+    // 内嵌网页适配：字体统一（Helvetica/宋体）+ 推广内容精简（幂等，仅首次生效）
+    const themeJS = loadPageThemeJS();
+    if (themeJS) {
+      await evaluate(target.webSocketDebuggerUrl, `(() => { if (window.__wbThemeApplied) return 'skip'; try { window.__wbThemeApplied = true; } catch {} ${themeJS} })()`).catch(() => {});
+    }
     const expression = buildProbe(adapter);
     const result = await evaluate(target.webSocketDebuggerUrl, expression);
     if (!result) return { ok: false, state: 'no-response', url: target.url };

@@ -61,7 +61,7 @@ swift build && open -n .build/arm64-apple-macosx/debug/ParallelWorkbench
 # 或 swift run ParallelWorkbench
 ```
 
-每个 pane 有独立标题栏：平台名、文字状态角标、放大/缩小按钮、刷新按钮和发送结果反馈；工作台外壳只使用暖白、石墨、鼠尾草三色，通过明度、描边和文案区分状态。
+每个 pane 有独立标题栏（40px）：平台名、纯文字状态（就绪/未登录/需人工验证等）与「…」菜单（独立缩放、恢复 100%、放大窗口、重新加载、回到对话）；工作台外壳使用浅灰底 + 白卡的低强调色板，深色仅用于可发送状态下的发送按钮。中文按宋体（SimSun，缺失时回退 Songti SC）、英文与数字按 Helvetica 渲染。
 
 ## 无人值守验收测试
 
