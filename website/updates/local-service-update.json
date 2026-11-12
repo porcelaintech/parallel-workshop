@@ -1,15 +1,15 @@
 {
-  "version": "0.6.0",
-  "publishedAt": "2026-11-12T05:40:00Z",
-  "notes": "智囊本地工作台 v0.6.0：全新低强调界面（统一输入区、无边框模型复选、分页右移、三列 40px 标题区），中文宋体 / 英文数字 Helvetica 字体统一，内嵌网页精简豆包、Kimi、千问的推广内容",
+  "version": "0.6.1",
+  "publishedAt": "2026-11-12T15:55:20Z",
+  "notes": "智囊本地工作台 v0.6.1：修复安装新版本后旧服务残留导致的「启动失败: fetch failed」（启动器版本校验自动重启服务 + 浏览器桥自愈重试）",
   "artifacts": {
     "darwin-universal": {
-      "url": "https://braintrust-downloads-1738978343093082.oss-accelerate.aliyuncs.com/downloads/Braintrust-0.6.0.dmg",
-      "sha256": "4324b4c671b422197588e5d4ad852dfed9b5e4ecc63ffa05d984c1a41fbacc46"
+      "url": "https://braintrust-downloads-1738978343093082.oss-accelerate.aliyuncs.com/downloads/Braintrust-0.6.1.dmg",
+      "sha256": "d0fe16dcbf0e9855b72ec6b83f61c5f1cf424055327810f39bda948eb5089073"
     },
     "win32-x64": {
-      "url": "https://braintrust-downloads-1738978343093082.oss-accelerate.aliyuncs.com/downloads/Braintrust-Setup-0.6.0.exe",
-      "sha256": "866440eb8ae8006bb29a788d5455b36ba663435522d873db8b343c4bb0caffd4"
+      "url": "https://braintrust-downloads-1738978343093082.oss-accelerate.aliyuncs.com/downloads/Braintrust-Setup-0.6.1.exe",
+      "sha256": "926c5ec966f37a3dcd35bb4e8a02959e63e89bae7ac3179910be27109dd94dc7"
     }
   }
 }
