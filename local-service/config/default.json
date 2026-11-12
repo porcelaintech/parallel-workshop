@@ -1,6 +1,6 @@
 {
   "productName": "智囊 · Braintrust",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "updateManifest": "https://braintrust.chat/updates/local-service-update.json",
   "browser": "auto",
   "openBrowser": true,

@@ -1,6 +1,6 @@
 {
   "name": "braintrust-local-service",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "private": true,
   "description": "Braintrust local browser service for Windows and macOS",
   "type": "module",
