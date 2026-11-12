@@ -127,9 +127,28 @@ export class BrowserManager {
     await this.ensureRunning();
     if (this.preparing) return this.preparing;
     this.preparing = (async () => {
-      if (!this.frameBridge) this.frameBridge = new FrameBridge({ browserPort: this.port, pageURL: this.serviceURL, log: this.log });
-      await this.frameBridge.start();
-      return { ok: true, browserPort: this.port };
+      const startBridge = async () => {
+        // 浏览器已重启/调试端口变化时，丢弃旧桥（旧桥持有过期的调试端口，会 fetch failed）
+        if (this.frameBridge && this.frameBridge.browserPort !== this.port) {
+          try { await this.frameBridge.stop(); } catch {}
+          this.frameBridge = null;
+        }
+        if (!this.frameBridge) this.frameBridge = new FrameBridge({ browserPort: this.port, pageURL: this.serviceURL, log: this.log });
+        await this.frameBridge.start();
+        return { ok: true, browserPort: this.port };
+      };
+      try {
+        return await startBridge();
+      } catch (error) {
+        // 浏览器会话可能已失效（调试端口失联/浏览器被关闭后残留状态）：重启浏览器再试一次，
+        // 避免窗口一直停在「启动失败: fetch failed」。
+        this.log(`iframe 桥初始化失败（${error.message}），重启浏览器后重试`);
+        try { await this.frameBridge?.stop(); } catch {}
+        this.frameBridge = null;
+        await this.stop();
+        await this.startBrowser();
+        return await startBridge();
+      }
     })();
     try { return await this.preparing; }
     finally { this.preparing = null; }

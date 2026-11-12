@@ -57,19 +57,31 @@ if [ -z "$BROWSER" ]; then
 fi
 export BRAINTRUST_BROWSER_PATH="$BROWSER"
 
-# 1) 已有服务：直接让它把工作台窗口带到前台。
+# 1) 已有服务：版本一致才复用；版本不一致（安装包刚更新）或无法开窗时重启服务。
 if [ -f "$SERVICE_JSON" ]; then
   PORT="$(read_json port)"
   TOKEN="$(read_json token)"
+  SERVICE_VERSION="$(read_json version)"
   if [[ "$PORT" =~ ^[0-9]+$ ]] && [ -n "$TOKEN" ]; then
     CODE="$(http_code "http://127.0.0.1:$PORT/api/health")"
     if [ "$CODE" = "200" ] || [ "$CODE" = "401" ]; then
-      RESULT="$(/usr/bin/curl -sS --max-time 45 -X POST \
-        -H "authorization: Bearer $TOKEN" -H 'content-type: application/json' \
-        -d '{}' "http://127.0.0.1:$PORT/api/browser/open" 2>/dev/null || true)"
-      if printf '%s' "$RESULT" | /usr/bin/grep -q '"ok":true'; then exit 0; fi
-      show_error "智囊服务在运行，但无法把窗口带到前台。请查看日志：$LOG"
-      exit 1
+      RESTART_REASON=""
+      if [ -n "${VERSION:-}" ] && [ "$SERVICE_VERSION" != "$VERSION" ]; then
+        RESTART_REASON="服务版本 $SERVICE_VERSION ≠ 应用版本 $VERSION"
+      else
+        RESULT="$(/usr/bin/curl -sS --max-time 45 -X POST \
+          -H "authorization: Bearer $TOKEN" -H 'content-type: application/json' \
+          -d '{}' "http://127.0.0.1:$PORT/api/browser/open" 2>/dev/null || true)"
+        if printf '%s' "$RESULT" | /usr/bin/grep -q '"ok":true'; then exit 0; fi
+        RESTART_REASON="工作台窗口打开失败"
+      fi
+      echo "[$(date '+%Y-%m-%d %H:%M:%S')] ${RESTART_REASON}，重启服务" >> "$LOG"
+      /usr/bin/curl -sS --max-time 5 -X POST -H "authorization: Bearer $TOKEN" \
+        "http://127.0.0.1:$PORT/api/quit" >/dev/null 2>&1 || true
+      for _ in $(seq 1 25); do
+        [ -z "$(http_code "http://127.0.0.1:$PORT/api/health")" ] && break
+        sleep 0.2
+      done
     fi
   fi
 fi

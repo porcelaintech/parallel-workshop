@@ -1,4 +1,4 @@
-﻿[CmdletBinding()]
+[CmdletBinding()]
 param()
 
 Set-StrictMode -Version 2.0
@@ -90,16 +90,33 @@ try {
   }
   $env:BRAINTRUST_BROWSER_PATH = $browser
 
-  # 1) 已有服务：直接把工作台窗口带到前台。
+  # 1) 已有服务：版本一致才复用；版本不一致（安装包刚更新）或无法开窗时重启服务。
   if (Test-Path -LiteralPath $ServiceJson) {
     $port = Get-ServicePort $ServiceJson
     $token = Get-ServiceToken $ServiceJson
+    $serviceVersion = ''
+    try { $serviceVersion = [string](Get-Content -LiteralPath $ServiceJson -Raw -Encoding UTF8 | ConvertFrom-Json).version } catch {}
+    $appVersion = ''
+    try { $appVersion = [string](Get-Content -LiteralPath (Join-Path $InstallRoot 'package.json') -Raw -Encoding UTF8 | ConvertFrom-Json).version } catch {}
     if ($port -gt 0 -and $token -and (Test-Service $port)) {
+      $restartReason = $null
+      if ($appVersion -and $serviceVersion -and $serviceVersion -ne $appVersion) {
+        $restartReason = "服务版本 $serviceVersion ≠ 应用版本 $appVersion"
+      } else {
+        try {
+          Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/browser/open" -Method Post -Headers @{ Authorization = "Bearer $token" } -ContentType 'application/json' -Body '{}' -TimeoutSec 45 | Out-Null
+          return
+        } catch {
+          $restartReason = '工作台窗口打开失败'
+        }
+      }
+      Add-Content -LiteralPath $Log -Value ("[{0}] {1}，重启服务" -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), $restartReason) -Encoding UTF8
       try {
-        Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/browser/open" -Method Post -Headers @{ Authorization = "Bearer $token" } -ContentType 'application/json' -Body '{}' -TimeoutSec 45 | Out-Null
-        return
-      } catch {
-        throw "智囊服务在运行，但无法打开工作台。请查看日志：$Log"
+        Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/quit" -Method Post -Headers @{ Authorization = "Bearer $token" } -ContentType 'application/json' -Body '{}' -TimeoutSec 10 | Out-Null
+      } catch {}
+      for ($i = 0; $i -lt 25; $i++) {
+        if (-not (Test-Service $port)) { break }
+        Start-Sleep -Milliseconds 200
       }
     }
   }
